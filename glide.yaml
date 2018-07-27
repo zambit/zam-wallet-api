@@ -1,0 +1,27 @@
+package: git.zam.io/wallet-backend/wallet-api
+import:
+- package: git.zam.io/wallet-backend/web-api
+  repo: git@git.zam.io:wallet-backend/web-api.git
+  vcs: git
+  version: master
+#  subpackages:
+#    - server/handlers/base
+#    - server/handlers/static
+#    - server/middlewares
+#    - config/db
+#    - config/server
+#    - db
+#    - services/sessions
+#    - services/sessions/jwt
+#    - services/sessions/mem
+#    - services/nosql
+#    - services/nosql/factory
+
+- package: github.com/gin-gonic/gin
+  version: 85221af84cf6ee99dc900bc41912abc09acfc1b5
+  subpackages:
+  - binding
+
+- name: github.com/gin-contrib/cors
+  vcs: git
+  version: cf4846e6a636a76237a28d9286f163c132e841bc

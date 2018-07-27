@@ -1,0 +1,163 @@
+/user/me/wallets:
+  post:
+    security:
+      - Bearer: []
+    summary: Create new user wallet for given coin
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Create wallet request
+        schema:
+          $ref: "./index.yaml#/definitions/CreateWalletRequest"
+    responses:
+      201:
+        description: New wallet has been successfully created
+        schema:
+          $ref: "./index.yaml#/definitions/WalletResponse"
+      default:
+        description: In case of any error
+        schema:
+          $ref: "./index.yaml#/definitions/Error"
+  get:
+    security:
+      - Bearer: []
+    summary: Get all user wallets
+    parameters:
+      - in: query
+        name: coin
+        required: false
+        type: string
+        description: "Filter by: coin name"
+      - in: query
+        name: wallet_id
+        required: false
+        type: string
+        description: Wallet ID
+      - in: query
+        name: page
+        type: string
+        required: false
+        description: Reference to the page
+      - in: query
+        name: count
+        type: integer
+        required: false
+        description: Number of items to show on the page
+    responses:
+      200:
+        description: All user wallets in a list
+        schema:
+          $ref: "./index.yaml#/definitions/AllWalletsResponse"
+      default:
+        description: In case of any error
+        schema:
+          $ref: "./index.yaml#/definitions/Error"
+
+/user/me/wallets/{wallet_id}:
+  parameters:
+    - in: path
+      name: wallet_id
+      required: true
+      type: string
+      description: Wallet ID
+  get:
+    security:
+      - Bearer: []
+    summary: Request user wallet info by wallet id
+    responses:
+      200:
+        description: Wallets list
+        schema:
+          $ref: "./index.yaml#/definitions/WalletResponse"
+      default:
+        description: In case of any error
+        schema:
+          $ref: "./index.yaml#/definitions/Error"
+
+/user/me/txs:
+  get:
+    security:
+      - Bearer: []
+    summary: Get all transactions or use filters
+    parameters:
+      - in: query
+        name: coin
+        required: false
+        type: string
+        description: "Filter by: coin name"
+      - in: query
+        name: wallet_id
+        required: false
+        type: string
+        description: "Filter by: wallet ID"
+      - in: query
+        name: recipient
+        required: false
+        type: string
+        description: "Filter by: Recipient address"
+      - in: query
+        name: from_time
+        required: false
+        type: string
+        format: date-time
+      - in: query
+        name: until_time
+        required: false
+        type: string
+        format: date-time
+      - in: query
+        name: page
+        type: string
+        required: false
+        description: Reference to the page
+      - in: query
+        name: count
+        type: integer
+        required: false
+        description: Number of items to show on the page
+    responses:
+      200:
+        description: Transactions list
+        schema:
+          $ref: "./index.yaml#/definitions/AllTransactionsResponse"
+      default:
+        description: In case of any error
+        schema:
+          $ref: "./index.yaml#/definitions/Error"
+  post:
+    security:
+      - Bearer: []
+    summary: Send transaction
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: "./index.yaml#/definitions/SendTransactionRequest"
+    responses:
+      201:
+        description: Pending transaction created
+        schema:
+          $ref: "./index.yaml#/definitions/SendTransactionResponse"
+
+/user/me/txs/{tx_id}:
+  parameters:
+    - in: path
+      name: tx_id
+      required: true
+      type: string
+      description: Transaction ID
+  get:
+    security:
+      - Bearer: []
+    summary: Get transaction for specified ID
+    responses:
+      200:
+        description: Transaction
+        schema:
+          $ref: "./index.yaml#/definitions/TransactionResponse"
+      default:
+        description: In case of any error
+        schema:
+          $ref: "./index.yaml#/definitions/Error"

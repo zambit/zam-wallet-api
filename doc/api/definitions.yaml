@@ -1,0 +1,192 @@
+BaseResponse:
+  properties:
+    result:
+      type: boolean
+
+CoinType:
+  type: string
+  description: Specifies coin type
+  enum:
+    - eth
+    - btc
+    - bch
+    - zam
+
+CreateWalletRequest:
+  properties:
+    coin:
+      $ref: "./index.yaml#/definitions/CoinType"
+    wallet_name:
+      type: string
+      description: Optional name for user wallet
+  required:
+    - coin
+
+WalletData:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique wallet id
+    coin:
+      $ref: "./index.yaml#/definitions/CoinType"
+    wallet_name:
+      type: string
+      description: Optional name for user wallet
+    address:
+      type: string
+      description: Real address inside coin blockchain
+    balance:
+      type: number
+      description: Wallet balance
+  required:
+    - id
+    - coin
+    - wallet_name
+    - address
+    - balance
+
+WalletResponse:
+  allOf:
+    - $ref: "./index.yaml#/definitions/BaseResponse"
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            wallet:
+              $ref: "./index.yaml#/definitions/WalletData"
+    
+AllWalletsResponse:
+  allOf:
+    - $ref: "./index.yaml#/definitions/BaseResponse"
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            сount:
+              type: integer
+              description: Count of returned transactions
+            next:
+              type: string
+              description: Reference to the next page
+            wallets:
+              items:
+                $ref: "./index.yaml#/definitions/WalletData"
+
+TransactionStatus:
+  description: Describes transaction status
+  type: string
+  enum:
+    - pending
+    - awaiting_recipient
+    - awaiting_confirmations
+    - done
+    - cancelled
+    - failed
+
+TransactionData:
+  type: object
+  properties:
+    id:
+      type: string
+      description: Unique identifier of the transaction
+    direction:
+      type: string
+      enum:
+        - incoming
+        - outgoing
+    status:
+      $ref: "./index.yaml#/definitions/TransactionStatus"
+    coin:
+      $ref: "./index.yaml#/definitions/CoinType"
+    recipient:
+      type: string
+      description: |
+        'Recipinet of this transaction, on of "me", "coin_address", "user_id"'
+    amount:
+      type: number
+      description: Amount of transferred coins
+  required:
+    - id
+    - direction
+    - recipient
+    - amount
+
+SendTransactionRequest:
+  properties:
+    wallet_id:
+      type: string
+      description: Wallet for featured transaction
+    recipient:
+      type: string
+      description: |
+        'Recipinet of this transaction, on of "me", "coin_address", "user_id"'
+    amount:
+      type: number
+      description: Amount of transferred coins
+
+SendTransactionResponse:
+  allOf:
+    - $ref: "./index.yaml#/definitions/BaseResponse"
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            transaction:
+              $ref: "./index.yaml#/definitions/TransactionData"
+    
+TransactionResponse:
+  allOf:
+    - $ref: "./index.yaml#/definitions/BaseResponse"
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            transaction:
+              $ref: "./index.yaml#/definitions/TransactionData"
+
+AllTransactionsResponse:
+  allOf:
+    - $ref: "./index.yaml#/definitions/BaseResponse"
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            сount:
+              type: integer
+              description: Count of returned transactions
+            next:
+              type: string
+              description: Reference to the next page
+            transactions:
+              items:
+                $ref: "./index.yaml#/definitions/TransactionData"
+
+Error:
+  description: Describes error occurred while request
+  properties:
+    message:
+      type: string
+      description: Generally describes error
+    fields:
+      description: |
+        This field is presented in case when error is cause of missed, misstyped or wrong formatted request 
+        parameter passed throught POST JSON body, query or path
+      type: array
+      items:
+        properties:
+          name:
+            type: string
+            description: Name of parameter which occurs error
+          input:
+            type: string
+            description: Describes the way in which this parameter has come
+          message:
+            type: string
+            description: Describes what wrong with this field

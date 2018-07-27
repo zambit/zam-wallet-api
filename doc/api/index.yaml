@@ -1,0 +1,28 @@
+---
+swagger: "2.0"
+info:
+  title: "ZamZam Wallet-API"
+  version: "0.0.1"
+  
+host: "znt03"
+basePath: "/api/v1"
+schemes:
+  - "https"
+
+consumes:
+  - application/json
+produces:
+  - application/json
+
+securityDefinitions:
+  Bearer:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: Requires "Bearer" prefix
+
+paths:
+  $ref: "./paths.yaml"
+
+definitions:
+  $ref: "./definitions.yaml"
