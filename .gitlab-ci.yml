@@ -40,7 +40,9 @@ build:
     - cd src/$PROJECT_GO_PATH
 
     # install dependencies
-    - glide install
+    - git config --global user.email "$GITLAB_USER_EMAIL"
+    - git config --global user.name "$GITLAB_USER_NAME"
+    - glide --debug up
 
     # build tests if they are present
     - tests_query=$( find -name '*_test.go | grep -v vendor' )
