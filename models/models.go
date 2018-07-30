@@ -6,8 +6,10 @@ import (
 
 // Coin
 type Coin struct {
-	ID   int64  `db:"id"`
-	Name string `db:"name"`
+	ID        int64  `db:"id"`
+	Name      string `db:"name"`
+	ShortName string `db:"short_name"`
+	Enabled   bool   `db:"enabled"`
 }
 
 // Wallet
@@ -17,9 +19,10 @@ type Wallet struct {
 
 	UserID int64 `db:"user_id"`
 
-	CreatedAt time.Time  `db:"created_at"`
-	UpdatedAt *time.Time `db:"updated_at"`
+	Address string `db:"address"`
 
-	Coin   CoinType
+	CreatedAt time.Time `db:"created_at"`
+
+	Coin   Coin
 	CoinID int64 `db:"coin_id"`
 }

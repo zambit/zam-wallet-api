@@ -11,11 +11,15 @@ import (
 	"io"
 	"time"
 
+	"context"
 	"git.zam.io/wallet-backend/wallet-api/config"
 	serverconf "git.zam.io/wallet-backend/wallet-api/config/server"
 	"git.zam.io/wallet-backend/wallet-api/server/handlers/wallets"
+	wmiddlewares "git.zam.io/wallet-backend/wallet-api/server/middlewares"
+	swallets "git.zam.io/wallet-backend/wallet-api/services/wallets"
 	"git.zam.io/wallet-backend/web-api/db"
 	_ "git.zam.io/wallet-backend/web-api/server/handlers"
+	"git.zam.io/wallet-backend/web-api/server/handlers/base"
 	"git.zam.io/wallet-backend/web-api/server/handlers/static"
 	"git.zam.io/wallet-backend/web-api/server/middlewares"
 	"git.zam.io/wallet-backend/web-api/services/nosql"
@@ -46,6 +50,12 @@ func Create(v *viper.Viper, cfg *config.RootScheme) cobra.Command {
 	v.BindPFlags(command.Flags())
 
 	return command
+}
+
+type stubWalletGenerator struct{}
+
+func (stubWalletGenerator) Create(coin, seed string) (privKey, address string, err error) {
+	return "", fmt.Sprintf("FAKE_%s_ADDRESS_%s", coin, seed), nil
 }
 
 // serverMain
@@ -151,10 +161,44 @@ func serverMain(cfg config.RootScheme) (err error) {
 		return
 	}
 
+	// provide wallets generator
+	err = c.Provide(func() swallets.IGenerator {
+		return stubWalletGenerator{}
+	})
+	if err != nil {
+		return
+	}
+
 	// provide auth middleware
 	err = c.Provide(func(sessStorage sessions.IStorage) gin.HandlerFunc {
 		return middlewares.AuthMiddlewareFactory(sessStorage, cfg.Server.Auth.TokenName)
-	}, dig.Name("auth"))
+	}, dig.Name("auth_middleware"))
+	if err != nil {
+		return
+	}
+
+	// provide user middleware
+	err = c.Provide(func(sessStorage sessions.IStorage) gin.HandlerFunc {
+		return base.WrapMiddleware(wmiddlewares.UserMiddlewareFactory(
+			func(c context.Context) (userID int64, present bool, valid bool) {
+				user := middlewares.GetUserDataFromContext(c.(*gin.Context))
+
+				rawID, present := user["id"]
+				if !present {
+					return
+				}
+				fID, valid := rawID.(float64)
+				if !valid {
+					return
+				}
+				userID = int64(fID)
+				return
+			},
+		))
+	}, dig.Name("user_middleware"))
+	if err != nil {
+		return
+	}
 
 	// close all resources
 	defer c.Invoke(func(closers ...io.Closer) {
