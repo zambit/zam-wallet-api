@@ -99,6 +99,9 @@ func GetFactory(d *db.Db) base.HandlerFunc {
 			return err
 		})
 		if err != nil {
+			if err == models.ErrNoSuchWallet {
+				err = errWalletIDInvalid
+			}
 			return
 		}
 
