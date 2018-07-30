@@ -8,13 +8,13 @@ create table coins (
 create table wallets (
   id         serial primary key,
   user_id    bigint not null,
-  coin_id    integer references coins(id) not null
+  coin_id    integer references coins(id) not null,
   name       varchar(64) not null,
   address    varchar(64) not null,
-  created_at time without time zone default now() at time zone 'UTC'
+  created_at time without time zone default (now() at time zone 'UTC')
 );
 
-insert into coins (name, short_name, enabled) values
+insert into coins (short_name, name, enabled) values
   ('BTC', 'Bitcoin', true),
   ('BCH', 'Bitcoin cash', false),
   ('ETH', 'Ethereum', false),
