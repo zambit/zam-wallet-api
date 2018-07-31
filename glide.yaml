@@ -5,6 +5,11 @@ import:
   vcs: git
   version: master
 
+- package: git.zam.io/wallet-backend/common
+  repo: http://git.zam.io/wallet-backend/common.git
+  vcs: git
+  version: master
+
 - package: github.com/gin-gonic/gin
   vcs: git
   repo: https://github.com/gin-gonic/gin
