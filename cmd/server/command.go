@@ -159,8 +159,8 @@ func serverMain(cfg config.RootScheme) (err error) {
 	}
 
 	// provide wallets generator
-	err = c.Provide(func(wConf walletconf.Scheme) (coordinator swallets.ICoordinator, err error) {
-		coordinator = swallets.New()
+	err = c.Provide(func(wConf walletconf.Scheme, logger logrus.FieldLogger) (coordinator swallets.ICoordinator, err error) {
+		coordinator = swallets.New(logger)
 		for coinName, nodeConf := range wConf.CryptoNodes {
 			rootLogger.WithField("conn_params", nodeConf).Infof("connecting %s node", coinName)
 			err = coordinator.Dial(coinName, nodeConf.Host, nodeConf.User, nodeConf.Pass, nodeConf.Testnet)

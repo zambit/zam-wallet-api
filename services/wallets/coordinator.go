@@ -4,6 +4,7 @@ import (
 	"errors"
 	errors2 "git.zam.io/wallet-backend/common/pkg/errors"
 	"git.zam.io/wallet-backend/wallet-api/services/wallets/providers"
+	"github.com/sirupsen/logrus"
 	"io"
 )
 
@@ -32,8 +33,9 @@ type ICoordinator interface {
 }
 
 // New creates new default coordinator
-func New() ICoordinator {
+func New(logger logrus.FieldLogger) ICoordinator {
 	return &coordinator{
+		logger:     logger.WithField("module", "wallets.coordinator"),
 		closers:    make(map[string]io.Closer),
 		generators: make(map[string]IGenerator),
 	}
@@ -41,6 +43,7 @@ func New() ICoordinator {
 
 // coordinator implements ICoordinator in straight way
 type coordinator struct {
+	logger     logrus.FieldLogger
 	closers    map[string]io.Closer
 	generators map[string]IGenerator
 }
@@ -52,7 +55,7 @@ func (c *coordinator) Dial(coinName string, host, user, pass string, testnet boo
 		return ErrCoinIsUnsupported
 	}
 
-	services, err := provider.Dial(host, user, pass, testnet)
+	services, err := provider.Dial(c.logger, host, user, pass, testnet)
 	if err != nil {
 		return err
 	}

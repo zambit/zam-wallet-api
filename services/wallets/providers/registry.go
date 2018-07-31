@@ -1,13 +1,14 @@
 package providers
 
 import (
+	"github.com/sirupsen/logrus"
 	"io"
 	"strings"
 )
 
 // Provider is not typo, it's noun derived from verb Dial
 type Provider interface {
-	Dial(host, user, pass string, testnet bool) (io.Closer, error)
+	Dial(logger logrus.FieldLogger, host, user, pass string, testnet bool) (io.Closer, error)
 }
 
 // registry is registry of per-coin service Provider

@@ -8,40 +8,62 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
+const (
+	defaultMainNetPort = 8332
+	defaultTestNetPort = 18332
+)
+
+// btcNode implements IGenerator interface for BTC/BCH nodes
 type btcNode struct {
 	logger    logrus.FieldLogger
 	client    *http.Client
 	rpcClient jsonrpc.RPCClient
 }
 
-func Dial(addr, user, pass string, testnet bool) (io.Closer, error) {
-	httpClient := &http.Client{}
+// Dial creates client HTTP connection using passed params, also checks connectivity by sending "getwalletinfo" request.
+//
+// If port not specified, automatically applies appropriate default port for selected network.
+//
+// If scheme not specified, automatically applies default http scheme, https must be specified explicitly.
+func Dial(logger logrus.FieldLogger, coin, addr, user, pass string, testnet bool) (io.Closer, error) {
+	// create client and sets default timeout everywhere
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        5,
+			TLSHandshakeTimeout: 5 * time.Second,
+		},
+		Timeout: time.Second * 10,
+	}
 	// set basic auth
 	if user != "" && pass != "" {
 		httpClient = HttpClientWithBasicAuth(httpClient, user, pass)
 	}
 
+	// if port not specified applies default BTC port for selected network type
 	if !strings.Contains(addr, ":") {
-		port := 8332
+		port := defaultMainNetPort
 		if testnet {
-			port = 18332
+			port = defaultTestNetPort
 		}
 		addr = fmt.Sprintf("%s:%d", addr, port)
 	}
 
+	// wrap host addr specifying http scheme
 	if !strings.Contains(addr, "http://") || !strings.Contains(addr, "http://") {
 		addr = fmt.Sprintf("http://%s", addr)
 	}
 
 	n := &btcNode{
-		logger: logrus.StandardLogger().WithField("module", "wallets.btc.rpc"),
+		logger: logger.WithField("module", "wallets.btc."+coin),
 		client: httpClient,
 		rpcClient: jsonrpc.NewClientWithOpts(
 			addr, &jsonrpc.RPCClientOpts{HTTPClient: httpClient},
 		),
 	}
+	// ping node
 	err := n.Ping()
 	if err != nil {
 		return nil, err
@@ -52,20 +74,47 @@ func Dial(addr, user, pass string, testnet bool) (io.Closer, error) {
 
 // Close implements io.Closer interface, does nothing since there is no keep-alive connections
 func (n *btcNode) Close() error {
+	if n.client.Transport != nil {
+		t, ok := n.client.Transport.(*http.Transport)
+		if !ok {
+			return nil
+		}
+		t.CloseIdleConnections()
+	}
 	return nil
 }
 
+// Create new BTC wallet chained with root wallet
+func (n *btcNode) Create() (address string, err error) {
+	err = n.doCall("getnewaddress", &address)
+	return
+}
+
 // Ping node by calling getwalletinfo
-func (n *btcNode) Ping() (err error) {
-	resp, err := n.rpcClient.Call("getwalletinfo")
+func (n *btcNode) Ping() error {
+	return n.doCall("getwalletinfo", nil)
+}
+
+//
+func (n *btcNode) doCall(method string, output interface{}, params ...interface{}) (err error) {
+	l := n.logger.WithField("method", method)
+
+	resp, err := n.rpcClient.Call(method)
 	if err == nil && resp.Error != nil {
 		err = resp.Error
 	}
 	if err != nil {
-		n.logger.WithError(err).Error("getwalletinfo call error")
+		l.WithError(err).Error("error occurs")
 		return
 	}
-	n.logger.WithField("resp", resp.Result).Info("successfully receive response")
+	if output != nil {
+		err = resp.GetObject(output)
+		if err != nil {
+			l.WithError(err).WithField("resp_body", resp.Result).Error("error occurs while unmarshal response body")
+			return
+		}
+	}
+	l.WithField("resp", resp.Result).Info("successfully received response")
 	return
 }
 
@@ -98,13 +147,15 @@ func HttpClientWithBasicAuth(c *http.Client, user, pass string) *http.Client {
 }
 
 // register dialer
-type provider struct{}
+type provider struct {
+	coin string
+}
 
-func (provider) Dial(host, user, pass string, testnet bool) (io.Closer, error) {
-	return Dial(host, user, pass, testnet)
+func (p provider) Dial(logger logrus.FieldLogger, host, user, pass string, testnet bool) (io.Closer, error) {
+	return Dial(logger, p.coin, host, user, pass, testnet)
 }
 
 func init() {
-	providers.Register("btc", provider{})
-	providers.Register("bch", provider{})
+	providers.Register("btc", provider{coin: "btc"})
+	providers.Register("bch", provider{coin: "bch"})
 }
