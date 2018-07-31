@@ -14,9 +14,11 @@ import (
 	"context"
 	"git.zam.io/wallet-backend/wallet-api/config"
 	serverconf "git.zam.io/wallet-backend/wallet-api/config/server"
+	walletconf "git.zam.io/wallet-backend/wallet-api/config/wallets"
 	"git.zam.io/wallet-backend/wallet-api/server/handlers/wallets"
 	wmiddlewares "git.zam.io/wallet-backend/wallet-api/server/middlewares"
 	swallets "git.zam.io/wallet-backend/wallet-api/services/wallets"
+	_ "git.zam.io/wallet-backend/wallet-api/services/wallets/btc"
 	"git.zam.io/wallet-backend/web-api/db"
 	_ "git.zam.io/wallet-backend/web-api/server/handlers"
 	"git.zam.io/wallet-backend/web-api/server/handlers/base"
@@ -52,20 +54,15 @@ func Create(v *viper.Viper, cfg *config.RootScheme) cobra.Command {
 	return command
 }
 
-type stubWalletGenerator struct{}
-
-func (stubWalletGenerator) Create(coin, seed string) (privKey, address string, err error) {
-	return "", fmt.Sprintf("FAKE_%s_ADDRESS_%s", coin, seed), nil
-}
-
 // serverMain
 func serverMain(cfg config.RootScheme) (err error) {
 	// create DI container and populate it with providers
 	c := dig.New()
 
 	// provide root logger
+	rootLogger := logrus.New()
 	err = c.Provide(func() logrus.FieldLogger {
-		return logrus.New()
+		return rootLogger
 	})
 	if err != nil {
 		return
@@ -127,8 +124,8 @@ func serverMain(cfg config.RootScheme) (err error) {
 		return
 	}
 
-	err = c.Provide(func() serverconf.Scheme {
-		return cfg.Server
+	err = c.Provide(func() (serverconf.Scheme, walletconf.Scheme) {
+		return cfg.Server, cfg.Wallets
 	})
 	if err != nil {
 		return
@@ -162,8 +159,17 @@ func serverMain(cfg config.RootScheme) (err error) {
 	}
 
 	// provide wallets generator
-	err = c.Provide(func() swallets.IGenerator {
-		return stubWalletGenerator{}
+	err = c.Provide(func(wConf walletconf.Scheme) (coordinator swallets.ICoordinator, err error) {
+		coordinator = swallets.New()
+		for coinName, nodeConf := range wConf.CryptoNodes {
+			rootLogger.WithField("conn_params", nodeConf).Infof("connecting %s node", coinName)
+			err = coordinator.Dial(coinName, nodeConf.Host, nodeConf.User, nodeConf.Pass, nodeConf.Testnet)
+			if err != nil {
+				rootLogger.WithError(err).Errorf("connecting node %s has been failed", coinName)
+				return
+			}
+		}
+		return
 	})
 	if err != nil {
 		return
@@ -201,9 +207,14 @@ func serverMain(cfg config.RootScheme) (err error) {
 	}
 
 	// close all resources
-	defer c.Invoke(func(closers ...io.Closer) {
+	defer c.Invoke(func(coordinator swallets.ICoordinator, closers ...io.Closer) {
 		for _, c := range closers {
 			c.Close()
+		}
+
+		err := coordinator.Close()
+		if err != nil {
+			rootLogger.WithError(err).Error("error occurred while closing wallets coordinator")
 		}
 	})
 

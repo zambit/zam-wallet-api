@@ -16,7 +16,7 @@ type Dependencies struct {
 	AuthMiddleware gin.HandlerFunc `name:"auth_middleware"`
 	UserMiddleware gin.HandlerFunc `name:"user_middleware"`
 	Database       *db.Db
-	Generator      wallets.IGenerator
+	Coordinator    wallets.ICoordinator
 }
 
 // Register
@@ -27,7 +27,7 @@ func Register(container *dig.Container) error {
 			dependencies.AuthMiddleware,
 			dependencies.UserMiddleware,
 		)
-		group.POST("/wallets", base.WrapHandler(CreateFactory(dependencies.Database, dependencies.Generator)))
+		group.POST("/wallets", base.WrapHandler(CreateFactory(dependencies.Database, dependencies.Coordinator)))
 		group.GET("/wallets/:wallet_id", base.WrapHandler(GetFactory(dependencies.Database)))
 		group.GET("/wallets", base.WrapHandler(GetAllFactory(dependencies.Database)))
 	})

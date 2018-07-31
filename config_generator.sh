@@ -10,4 +10,20 @@ server:
         tokenstorage: jwtpersistent
     jwt:
         secret: '$STAGING_SECRET'
-        method: HS256'
+        method: HS256
+wallets:
+    cryptonodes:
+        ' && [ ! -z "$BTC_HOST" ] && echo '
+        btc:
+            host: '$BTC_HOST'
+            user: '$BTC_USER'
+            pass: '$BTC_PASS'
+            testnet: '$BTC_TESTNET'
+        ' && [ ! -z "$BCH_HOST" ] && echo '
+        bch:
+            host: '$BCH_HOST'
+            user: '$BCH_USER'
+            pass: '$BCH_PASS'
+            testnet: '$BCH_TESTNET'
+
+'

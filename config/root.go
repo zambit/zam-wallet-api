@@ -2,6 +2,7 @@ package config
 
 import (
 	"git.zam.io/wallet-backend/wallet-api/config/server"
+	"git.zam.io/wallet-backend/wallet-api/config/wallets"
 	"git.zam.io/wallet-backend/web-api/config/db"
 	"github.com/spf13/viper"
 )
@@ -16,6 +17,9 @@ type RootScheme struct {
 
 	// Server holds different web-server related configuration values
 	Server server.Scheme
+
+	// Wallets configuration
+	Wallets wallets.Scheme
 }
 
 // Init set default values

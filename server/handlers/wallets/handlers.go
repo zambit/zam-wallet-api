@@ -27,7 +27,7 @@ var (
 )
 
 // CreateFactory
-func CreateFactory(d *db.Db, generator wallets.IGenerator) base.HandlerFunc {
+func CreateFactory(d *db.Db, coordinator wallets.ICoordinator) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		// bind params
 		params := CreateRequest{}
@@ -43,8 +43,20 @@ func CreateFactory(d *db.Db, generator wallets.IGenerator) base.HandlerFunc {
 			return
 		}
 
+		// validate coin and get generator for specific coin using coordinator
+		generator, err := coordinator.Generator(params.Coin)
+		if err != nil {
+			if err == wallets.ErrNoSuchCoin {
+				err = errCoinInvalid
+			}
+			return
+		}
+
 		// generate wallet address
-		_, walletAddress, err := generator.Create(params.Coin, fmt.Sprintf("%d_%s", userID, params.Coin))
+		walletAddress, err := generator.Create()
+		if err != nil {
+			return
+		}
 
 		// generate wallet struct
 		wallet := models.Wallet{
