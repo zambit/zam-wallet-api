@@ -9,42 +9,76 @@ import (
 	"git.zam.io/wallet-backend/web-api/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
 var (
 	errUserMiddlewareMissing = base.ErrorView{
 		Code:    http.StatusInternalServerError,
-		Message: "",
+		Message: "user middleware is missing",
 	}
 	errWalletIDInvalid = base.NewErrorsView("").AddField(
-		"path", "wallet_id", "invalid wallet id",
+		"path", "wallet_id", "wallet id invalid",
 	)
-	errCoinInvalid = base.NewErrorsView("").AddField(
-		"body", "coin", "invalid coin",
+	errWalletIDNotFound = base.NewErrorsView("").AddField(
+		"path", "wallet_id", "wallet not found",
 	)
+	errCoinInvalidDescr = base.FieldErrorDescr{
+		Name: "coin", Input: "body", Message: "invalid coin",
+	}
+	errCoinInvalid = base.NewErrorsView("").AddFieldDescr(errCoinInvalidDescr)
 )
 
-// CreateFactory
+func init() {
+	// do it with init func due to bad base errors design, anyway it will be reworked soon
+	errWalletIDNotFound.Code = http.StatusNotFound
+}
+
+// CreateFactory creates handler which used to create wallet, accepting 'CreateRequest' like scheme and returns
+// 'Response' on success.
 func CreateFactory(d *db.Db, generator wallets.IGenerator) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		// bind params
 		params := CreateRequest{}
-		_, err = base.ShouldBindJSON(c, &params)
+		fErr, err := base.ShouldBindJSON(c, &params)
+		if err != nil {
+			lookupCoinErr := true
+			for _, f := range fErr.Fields {
+				if f.Name == "coin" {
+					lookupCoinErr = false
+					break
+				}
+			}
+			if lookupCoinErr {
+				_, err = models.GetCoin(d, params.Coin)
+				if err == models.ErrNoSuchCoin {
+					fErr.AddFieldDescr(errCoinInvalidDescr)
+				}
+				err = fErr
+			}
+			return
+		}
+
+		// extract user id
+		userID, err := getUserID(c)
 		if err != nil {
 			return
 		}
 
-		// extract user id from context which must be attached by user middleware
-		userID, presented := middlewares.GetUserIDFromContext(c)
-		if !presented {
-			err = errUserMiddlewareMissing
+		// validate coin name
+		_, err = models.GetCoin(d, params.Coin)
+		if err != nil {
+			if err == models.ErrNoSuchCoin {
+				err = errCoinInvalid
+			}
 			return
 		}
 
 		// generate wallet address
 		_, walletAddress, err := generator.Create(params.Coin, fmt.Sprintf("%d_%s", userID, params.Coin))
+		if err != nil {
+			return
+		}
 
 		// generate wallet struct
 		wallet := models.Wallet{
@@ -75,21 +109,20 @@ func CreateFactory(d *db.Db, generator wallets.IGenerator) base.HandlerFunc {
 	}
 }
 
-// GetFactory
+// GetFactory creates handler which used to query wallet which is specified by path param 'wallet_id', returns
+// 'Response' on success.
 func GetFactory(d *db.Db) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
-		// parse wallet id from passed as path param
-		rawWalletID := c.Param("wallet_id")
-		walletID, parseIntErr := strconv.ParseInt(rawWalletID, 10, 64)
-		if parseIntErr != nil {
+		// parse wallet id path param
+		walletID, walletIDValid := parseWalletIDView(c.Param("wallet_id"))
+		if !walletIDValid {
 			err = errWalletIDInvalid
 			return
 		}
 
-		// extract user id from context which must be attached by user middleware
-		userID, presented := middlewares.GetUserIDFromContext(c)
-		if !presented {
-			err = errUserMiddlewareMissing
+		// extract user id
+		userID, err := getUserID(c)
+		if err != nil {
 			return
 		}
 
@@ -100,7 +133,8 @@ func GetFactory(d *db.Db) base.HandlerFunc {
 		})
 		if err != nil {
 			if err == models.ErrNoSuchWallet {
-				err = errWalletIDInvalid
+				// invalid wallet id also set 404 error code
+				err = errWalletIDNotFound
 			}
 			return
 		}
@@ -114,27 +148,49 @@ func GetFactory(d *db.Db) base.HandlerFunc {
 // GetAllFactory
 func GetAllFactory(d *db.Db) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
-		// TODO extract filter params
+		params := DefaultGetAllRequest()
+		// ignore error due to invalid query params just ignored
+		c.BindQuery(&params)
 
-		// extract user id from context which must be attached by user middleware
-		userID, presented := middlewares.GetUserIDFromContext(c)
-		if !presented {
-			err = errUserMiddlewareMissing
+		// map then to filters description
+		walletsFilters := models.GetWalletFilters{
+			ByCoin: params.ByCoin,
+			Count:  params.Count,
+		}
+		// parse cursor
+		fromID, valid := parseWalletIDView(params.Cursor)
+		if !valid {
+			walletsFilters.FromID = fromID
+		}
+
+		// extract user id
+		userID, err := getUserID(c)
+		if err != nil {
 			return
 		}
 
-		var wallets []models.Wallet
+		var wts []models.Wallet
 		var totalCount int64
 		err = d.Tx(func(tx db.ITx) error {
-			wallets, totalCount, err = models.GetWallets(tx, userID)
+			wts, totalCount, err = models.GetWallets(tx, userID, walletsFilters)
 			return err
 		})
 		if err != nil {
 			return
 		}
 
-		// render response view
-		resp = AllResponseFromWallets(wallets, totalCount)
+		// prepare response body
+		resp = AllResponseFromWallets(wts, totalCount)
 		return
 	}
+}
+
+// utils
+// getUserID extracts user id from context which must be attached by user middleware
+func getUserID(c *gin.Context) (userID int64, err error) {
+	userID, presented := middlewares.GetUserIDFromContext(c)
+	if !presented {
+		err = errUserMiddlewareMissing
+	}
+	return
 }

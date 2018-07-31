@@ -16,3 +16,10 @@ import:
   vcs: git
   repo: https://github.com/gin-contrib/cors
   version: cf4846e6a636a76237a28d9286f163c132e841bc
+
+- package: github.com/golang-migrate/migrate
+  subpackages:
+  - database/postgres
+  - source/file
+
+- package: github.com/lib/pq

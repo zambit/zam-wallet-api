@@ -11,6 +11,19 @@ type CreateRequest struct {
 	WalletName string `json:"wallet_name" validate:"omitempty,min=3"`
 }
 
+// GetAllRequest used to parse get all wallets request filter parms bounded from query
+type GetAllRequest struct {
+	ByCoin string `form:"coin"`
+	Cursor string `form:"cursor"`
+	Count  int64  `form:"count"`
+}
+
+func DefaultGetAllRequest() GetAllRequest {
+	return GetAllRequest{
+		Count: 10,
+	}
+}
+
 // View used to represent wallet model
 type View struct {
 	ID      string `json:"id"`
@@ -19,12 +32,12 @@ type View struct {
 	Address string `json:"address"`
 }
 
-// Response
+// Response represents create and get wallets response
 type Response struct {
 	Wallet View `json:"wallet"`
 }
 
-// AllResponse
+// AllResponse represents get all wallets response
 type AllResponse struct {
 	Count   int64  `json:"count"`
 	Next    string `json:"next"`
@@ -43,7 +56,7 @@ func ResponseFromWallet(wallet models.Wallet) Response {
 	}
 }
 
-// AllResponseFromWallets
+// AllResponseFromWallets prepares wallets representation
 func AllResponseFromWallets(wallets []models.Wallet, totalCount int64) AllResponse {
 	views := make([]View, len(wallets))
 	var next string
@@ -61,6 +74,14 @@ func AllResponseFromWallets(wallets []models.Wallet, totalCount int64) AllRespon
 	}
 }
 
+// getWalletIDView wallet id to view representation
 func getWalletIDView(id int64) string {
 	return strconv.FormatInt(id, 10)
+}
+
+// parseWalletIDView
+func parseWalletIDView(rawID string) (id int64, valid bool) {
+	id, parseIntErr := strconv.ParseInt(rawID, 10, 64)
+	valid = parseIntErr == nil
+	return
 }
