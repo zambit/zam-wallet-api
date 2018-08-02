@@ -102,7 +102,7 @@ func UpdateWallet(tx db.ITx, id int64, diff *WalletDiff) (err error) {
 	namedArgs["wallet_id"] = id
 
 	updateRows := make([]string, 0, len(colNames))
-	for i, arg := range colNames {
+	for i, arg := range colArgs {
 		name := colNames[i]
 
 		namedArgs[name] = arg

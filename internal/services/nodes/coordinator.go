@@ -6,6 +6,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/sirupsen/logrus"
 	"io"
+	"strings"
 )
 
 var (
@@ -50,6 +51,8 @@ type coordinator struct {
 
 // Dial lookup service provider registry, dial no safe with concurrent getters usage
 func (c *coordinator) Dial(coinName string, host, user, pass string, testnet bool) error {
+	coinName = strings.ToUpper(coinName)
+
 	provider, ok := providers.Get(coinName)
 	if !ok {
 		return ErrCoinIsUnsupported
@@ -84,6 +87,8 @@ func (c *coordinator) Close() error {
 
 // Generator implements ICoordinator interface
 func (c *coordinator) Generator(coinName string) (IGenerator, error) {
+	coinName = strings.ToUpper(coinName)
+
 	if _, ok := c.closers[coinName]; !ok {
 		return nil, ErrNoSuchCoin
 	}

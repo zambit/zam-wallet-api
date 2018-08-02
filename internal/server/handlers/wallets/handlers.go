@@ -27,7 +27,7 @@ var (
 		"body", "coin", "wallet of such coin already exists",
 	)
 	errCoinInvalidDescr = base.FieldErrorDescr{
-		Name: "name", Input: "body", Message: "invalid name",
+		Name: "coin", Input: "body", Message: "invalid coin name",
 	}
 	errCoinInvalid = base.NewErrorsView("").AddFieldDescr(errCoinInvalidDescr)
 )
@@ -47,7 +47,7 @@ func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 		if err != nil {
 			lookupCoinErr := true
 			for _, f := range fErr.Fields {
-				if f.Name == "name" {
+				if f.Name == "coin" {
 					lookupCoinErr = false
 					break
 				}
@@ -61,6 +61,9 @@ func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 			}
 			return
 		}
+
+		// uppercase coin name
+		params.Coin = strings.ToUpper(params.Coin)
 
 		// extract user id
 		userID, err := getUserID(c)

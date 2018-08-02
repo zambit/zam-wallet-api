@@ -91,7 +91,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			generator.On("Create").Return(generatedAddress, nil)
 
 			resp, code, err := handler(createContextWithUserID(map[string]interface{}{
-				"name":        "btc",
+				"coin":        "btc",
 				"wallet_name": "test wallet",
 			}, userID))
 
@@ -110,21 +110,22 @@ var _ = Describe("testings /wallets endpoints", func() {
 			By("ensuring db state")
 			wID, err := strconv.ParseInt(walletResponse.ID, 10, 64)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = models.GetWallet(d, userID, wID)
+			w, err := models.GetWallet(d, userID, wID)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(w.Address).To(Equal(generatedAddress))
 		})
 
 		ItD("should return 'no such name' error ", func(handler base.HandlerFunc, generator *mocks.IGenerator) {
 			generator.On("Create", "NOTVALIDCOIN", "100_NOTVALIDCOIN").Return("", "", nil)
 
 			resp, _, err := handler(createContextWithUserID(map[string]interface{}{
-				"name":        "NOTVALIDCOIN",
+				"coin":        "NOTVALIDCOIN",
 				"wallet_name": "test wallet",
 			}, userID))
 			Expect(err).To(HaveOccurred())
 			Expect(resp).To(BeNil())
 			Expect(err).To(Equal(
-				base.NewErrorsView("").AddField("body", "name", "invalid name"),
+				base.NewErrorsView("").AddField("body", "coin", "invalid coin name"),
 			))
 		})
 
@@ -140,7 +141,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 			By("performing query")
 			resp, _, err := handler(createContextWithUserID(map[string]interface{}{
-				"name": "btc",
+				"coin": "btc",
 			}, userID))
 			Expect(err).To(HaveOccurred())
 			Expect(resp).To(BeNil())

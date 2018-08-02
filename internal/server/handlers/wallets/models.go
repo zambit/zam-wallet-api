@@ -3,11 +3,12 @@ package wallets
 import (
 	"git.zam.io/wallet-backend/wallet-api/pkg/models"
 	"strconv"
+	"strings"
 )
 
 // CreateRequest used to parse create wallet request body params
 type CreateRequest struct {
-	Coin       string `json:"name"`
+	Coin       string `json:"coin"`
 	WalletName string `json:"wallet_name" validate:"omitempty,min=3"`
 }
 
@@ -49,7 +50,7 @@ func ResponseFromWallet(wallet models.Wallet) Response {
 	return Response{
 		Wallet: View{
 			ID:      getWalletIDView(wallet.ID),
-			Coin:    wallet.Coin.ShortName,
+			Coin:    strings.ToLower(wallet.Coin.ShortName),
 			Name:    wallet.Name,
 			Address: wallet.Address,
 		},
