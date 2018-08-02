@@ -1,0 +1,1 @@
+alter table wallets alter column created_at type time without time zone using created_at::time without time zone;

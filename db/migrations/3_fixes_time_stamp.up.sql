@@ -1,0 +1,1 @@
+alter table wallets alter column created_at type timestamp without time zone using current_date + created_at;
