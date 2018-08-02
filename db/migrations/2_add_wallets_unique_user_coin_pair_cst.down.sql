@@ -1,0 +1,1 @@
+alter table wallets drop constraint wallets_unique_user_coin_pair_cst;

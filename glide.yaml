@@ -1,30 +1,26 @@
 package: git.zam.io/wallet-backend/wallet-api
 import:
 - package: git.zam.io/wallet-backend/web-api
+  version: master
   repo: http://git.zam.io/wallet-backend/web-api.git
   vcs: git
-  version: master
-
 - package: git.zam.io/wallet-backend/common
+  version: master
   repo: http://git.zam.io/wallet-backend/common.git
   vcs: git
-  version: master
-
 - package: github.com/gin-gonic/gin
-  vcs: git
-  repo: https://github.com/gin-gonic/gin
   version: 85221af84cf6ee99dc900bc41912abc09acfc1b5
+  repo: https://github.com/gin-gonic/gin
+  vcs: git
   subpackages:
   - binding
-
-- name: github.com/gin-contrib/cors
-  vcs: git
-  repo: https://github.com/gin-contrib/cors
+- package: ""
   version: cf4846e6a636a76237a28d9286f163c132e841bc
-
+  repo: https://github.com/gin-contrib/cors
+  vcs: git
 - package: github.com/golang-migrate/migrate
   subpackages:
   - database/postgres
   - source/file
-
 - package: github.com/lib/pq
+- package: github.com/jmoiron/sqlx

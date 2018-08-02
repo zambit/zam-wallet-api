@@ -23,6 +23,6 @@ type Wallet struct {
 
 	CreatedAt time.Time `db:"created_at"`
 
-	Coin   Coin
+	Coin   Coin  `db:",prefix=coins_"`
 	CoinID int64 `db:"coin_id"`
 }

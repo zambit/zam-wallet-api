@@ -7,7 +7,7 @@ import (
 
 // CreateRequest used to parse create wallet request body params
 type CreateRequest struct {
-	Coin       string `json:"coin"`
+	Coin       string `json:"name"`
 	WalletName string `json:"wallet_name" validate:"omitempty,min=3"`
 }
 
@@ -27,7 +27,7 @@ func DefaultGetAllRequest() GetAllRequest {
 // View used to represent wallet model
 type View struct {
 	ID      string `json:"id"`
-	Coin    string `json:"coin"`
+	Coin    string `json:"name"`
 	Name    string `json:"wallet_name"`
 	Address string `json:"address"`
 }
@@ -57,15 +57,15 @@ func ResponseFromWallet(wallet models.Wallet) Response {
 }
 
 // AllResponseFromWallets prepares wallets representation
-func AllResponseFromWallets(wallets []models.Wallet, totalCount int64) AllResponse {
-	views := make([]View, len(wallets))
+func AllResponseFromWallets(wallets []models.Wallet, totalCount int64, hasNext bool) AllResponse {
+	views := make([]View, 0, len(wallets))
 	var next string
-	if len(wallets) > 0 {
+	if len(wallets) > 0 && hasNext {
 		next = getWalletIDView(wallets[len(wallets)-1].ID)
 	}
 
-	for i, w := range wallets {
-		views[i] = ResponseFromWallet(w).Wallet
+	for _, w := range wallets {
+		views = append(views, ResponseFromWallet(w).Wallet)
 	}
 	return AllResponse{
 		Count:   totalCount,

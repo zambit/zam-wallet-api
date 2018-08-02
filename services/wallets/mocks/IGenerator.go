@@ -8,30 +8,23 @@ type IGenerator struct {
 	mock.Mock
 }
 
-// Create provides a mock function with given fields: coin, seed
-func (_m *IGenerator) Create(coin string, seed string) (string, string, error) {
-	ret := _m.Called(coin, seed)
+// Create provides a mock function with given fields:
+func (_m *IGenerator) Create() (string, error) {
+	ret := _m.Called()
 
 	var r0 string
-	if rf, ok := ret.Get(0).(func(string, string) string); ok {
-		r0 = rf(coin, seed)
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	var r1 string
-	if rf, ok := ret.Get(1).(func(string, string) string); ok {
-		r1 = rf(coin, seed)
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
 	} else {
-		r1 = ret.Get(1).(string)
+		r1 = ret.Error(1)
 	}
 
-	var r2 error
-	if rf, ok := ret.Get(2).(func(string, string) error); ok {
-		r2 = rf(coin, seed)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
+	return r0, r1
 }
