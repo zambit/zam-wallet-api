@@ -2,9 +2,9 @@ package wallets
 
 import (
 	"fmt"
-	"git.zam.io/wallet-backend/wallet-api/models"
-	"git.zam.io/wallet-backend/wallet-api/server/middlewares"
-	"git.zam.io/wallet-backend/wallet-api/services/wallets"
+	"git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
+	"git.zam.io/wallet-backend/wallet-api/pkg/models"
 	"git.zam.io/wallet-backend/web-api/db"
 	"git.zam.io/wallet-backend/web-api/server/handlers/base"
 	"github.com/gin-gonic/gin"
@@ -39,7 +39,7 @@ func init() {
 
 // CreateFactory creates handler which used to create wallet, accepting 'CreateRequest' like scheme and returns
 // 'Response' on success.
-func CreateFactory(d *db.Db, coordinator wallets.ICoordinator) base.HandlerFunc {
+func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		// bind params
 		params := CreateRequest{}
@@ -80,7 +80,7 @@ func CreateFactory(d *db.Db, coordinator wallets.ICoordinator) base.HandlerFunc 
 		// validate name and get generator for specific name using coordinator
 		generator, err := coordinator.Generator(params.Coin)
 		if err != nil {
-			if err == wallets.ErrNoSuchCoin {
+			if err == nodes.ErrNoSuchCoin {
 				err = errCoinInvalid
 			}
 			return

@@ -5,9 +5,9 @@ import (
 
 	"encoding/json"
 	"fmt"
-	"git.zam.io/wallet-backend/wallet-api/models"
-	"git.zam.io/wallet-backend/wallet-api/services/wallets"
-	"git.zam.io/wallet-backend/wallet-api/services/wallets/mocks"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/mocks"
+	"git.zam.io/wallet-backend/wallet-api/pkg/models"
 	"git.zam.io/wallet-backend/web-api/db"
 	. "git.zam.io/wallet-backend/web-api/fixtures"
 	"git.zam.io/wallet-backend/web-api/fixtures/database"
@@ -72,17 +72,17 @@ var _ = Describe("testings /wallets endpoints", func() {
 			userID = 100
 		)
 
-		BeforeEachCProvide(func() (*mocks.IGenerator, wallets.IGenerator) {
+		BeforeEachCProvide(func() (*mocks.IGenerator, nodes.IGenerator) {
 			g := &mocks.IGenerator{}
 			return g, g
 		})
-		BeforeEachCProvide(func(generator *mocks.IGenerator) (*mocks.ICoordinator, wallets.ICoordinator) {
+		BeforeEachCProvide(func(generator *mocks.IGenerator) (*mocks.ICoordinator, nodes.ICoordinator) {
 			c := &mocks.ICoordinator{}
 			c.On("Generator", mock.Anything).Return(generator, nil)
 			return c, c
 		})
 
-		BeforeEachCProvide(func(d *db.Db, coordinator wallets.ICoordinator) base.HandlerFunc {
+		BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 			return CreateFactory(d, coordinator)
 		})
 

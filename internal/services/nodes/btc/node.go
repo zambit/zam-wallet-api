@@ -2,7 +2,7 @@ package btc
 
 import (
 	"fmt"
-	"git.zam.io/wallet-backend/wallet-api/services/wallets/providers"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/danields761/jsonrpc"
 	"github.com/sirupsen/logrus"
 	"io"

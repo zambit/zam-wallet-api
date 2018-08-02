@@ -1,7 +1,7 @@
 package wallets
 
 import (
-	"git.zam.io/wallet-backend/wallet-api/services/wallets"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/web-api/db"
 	"git.zam.io/wallet-backend/web-api/server/handlers/base"
 	"github.com/gin-gonic/gin"
@@ -16,7 +16,7 @@ type Dependencies struct {
 	AuthMiddleware gin.HandlerFunc `name:"auth_middleware"`
 	UserMiddleware gin.HandlerFunc `name:"user_middleware"`
 	Database       *db.Db
-	Coordinator    wallets.ICoordinator
+	Coordinator    nodes.ICoordinator
 }
 
 // Register

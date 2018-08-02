@@ -1,4 +1,4 @@
-package wallets
+package nodes
 
 // IGenerator used to generate user wallet for specified coin
 type IGenerator interface {

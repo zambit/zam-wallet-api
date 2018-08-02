@@ -1,7 +1,7 @@
 package wallets
 
 import (
-	"git.zam.io/wallet-backend/wallet-api/models"
+	"git.zam.io/wallet-backend/wallet-api/pkg/models"
 	"strconv"
 )
 

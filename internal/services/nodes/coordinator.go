@@ -1,9 +1,9 @@
-package wallets
+package nodes
 
 import (
 	"errors"
 	errors2 "git.zam.io/wallet-backend/common/pkg/errors"
-	"git.zam.io/wallet-backend/wallet-api/services/wallets/providers"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/sirupsen/logrus"
 	"io"
 )
