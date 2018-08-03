@@ -95,6 +95,15 @@ func (n *btcNode) Close() error {
 // Create new BTC wallet chained with root wallet
 func (n *btcNode) Create() (address string, err error) {
 	err = n.doCall("getnewaddress", &address)
+	if err != nil {
+		return
+	}
+
+	// trim prefixes when wallet appears as "prefix:address"
+	if index := strings.IndexRune(address, ':'); index != -1 {
+		address = address[index+1:]
+	}
+
 	return
 }
 
