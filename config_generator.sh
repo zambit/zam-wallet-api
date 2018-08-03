@@ -11,6 +11,11 @@ server:
     jwt:
         secret: '$STAGING_SECRET'
         method: HS256
+isc:
+    brokeruri: '$BROKER_URI'
+    statsenabled: false
+    statspath: /internal/stats
+
 wallets:
     cryptonodes:
         ' && [ ! -z "$BTC_HOST" ] && echo '
