@@ -4,6 +4,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/config/server"
 	"git.zam.io/wallet-backend/wallet-api/config/wallets"
 	"git.zam.io/wallet-backend/web-api/config/db"
+	"git.zam.io/wallet-backend/web-api/config/isc"
 	"github.com/spf13/viper"
 )
 
@@ -20,6 +21,9 @@ type RootScheme struct {
 
 	// Wallets configuration
 	Wallets wallets.Scheme
+
+	// ISC contains inter-process communication params
+	ISC isc.Scheme
 }
 
 // Init set default values

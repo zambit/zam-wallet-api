@@ -2,7 +2,7 @@ package middlewares
 
 import (
 	"context"
-	"git.zam.io/wallet-backend/web-api/server/handlers/base"
+	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )

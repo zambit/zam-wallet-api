@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/mocks"
-	"git.zam.io/wallet-backend/wallet-api/pkg/models"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"git.zam.io/wallet-backend/web-api/db"
 	. "git.zam.io/wallet-backend/web-api/fixtures"
 	"git.zam.io/wallet-backend/web-api/fixtures/database"
 	"git.zam.io/wallet-backend/web-api/fixtures/database/migrations"
-	"git.zam.io/wallet-backend/web-api/server/handlers/base"
+	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -83,7 +84,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 		})
 
 		BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
-			return CreateFactory(d, coordinator)
+			return CreateFactory(wallets.NewApi(d, coordinator))
 		})
 
 		ItD("should create wallet successfully", func(handler base.HandlerFunc, d *db.Db, generator *mocks.IGenerator) {
@@ -110,7 +111,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			By("ensuring db state")
 			wID, err := strconv.ParseInt(walletResponse.ID, 10, 64)
 			Expect(err).NotTo(HaveOccurred())
-			w, err := models.GetWallet(d, userID, wID)
+			w, err := queries.GetWallet(d, userID, wID)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w.Address).To(Equal(generatedAddress))
 		})
@@ -131,9 +132,9 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 		ItD("should reject wallet creation due to wallet duplication", func(d *db.Db, handler base.HandlerFunc) {
 			By("manually creating first wallet")
-			_, err := models.CreateWallet(d, models.Wallet{
+			_, err := queries.CreateWallet(d, queries.Wallet{
 				UserID: userID,
-				Coin: models.Coin{
+				Coin: queries.Coin{
 					ShortName: "btc",
 				},
 			})
@@ -169,9 +170,9 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 			// create btc wallets
 			for i := 0; i < 5; i++ {
-				w, e := models.CreateWallet(d, models.Wallet{
+				w, e := queries.CreateWallet(d, queries.Wallet{
 					UserID: userID,
-					Coin:   models.Coin{ShortName: "BTC"}},
+					Coin:   queries.Coin{ShortName: "BTC"}},
 				)
 				Expect(e).NotTo(HaveOccurred())
 				btcWIDs = append(btcWIDs, idToView(w.ID))
@@ -179,9 +180,9 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 			// create eth wallets
 			for i := 0; i < 5; i++ {
-				w, e := models.CreateWallet(d, models.Wallet{
+				w, e := queries.CreateWallet(d, queries.Wallet{
 					UserID: userID,
-					Coin:   models.Coin{ShortName: "ETH"}},
+					Coin:   queries.Coin{ShortName: "ETH"}},
 				)
 				Expect(e).NotTo(HaveOccurred())
 				ethWIDs = append(ethWIDs, idToView(w.ID))
@@ -196,7 +197,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 		Context("when querying multiple wallets", func() {
 			BeforeEachCProvide(func(d *db.Db) base.HandlerFunc {
-				return GetAllFactory(d)
+				return GetAllFactory(wallets.NewApi(d, nil))
 			})
 
 			ItD("should return all rows due to no filters", func(handler base.HandlerFunc, btcWIDs btcWIDsT, ethWIDs ethWIDsT) {

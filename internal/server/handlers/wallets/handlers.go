@@ -1,15 +1,12 @@
 package wallets
 
 import (
-	"fmt"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
-	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
-	"git.zam.io/wallet-backend/wallet-api/pkg/models"
-	"git.zam.io/wallet-backend/web-api/db"
-	"git.zam.io/wallet-backend/web-api/server/handlers/base"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
+	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"strings"
 )
 
 var (
@@ -39,7 +36,7 @@ func init() {
 
 // CreateFactory creates handler which used to create wallet, accepting 'CreateRequest' like scheme and returns
 // 'Response' on success.
-func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
+func CreateFactory(api *wallets.Api) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		// bind params
 		params := CreateRequest{}
@@ -53,8 +50,8 @@ func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 				}
 			}
 			if lookupCoinErr {
-				_, err = models.GetCoin(d, params.Coin)
-				if err == models.ErrNoSuchCoin {
+				err = api.ValidateCoin(params.Coin)
+				if err == errs.ErrNoSuchCoin {
 					fErr.AddFieldDescr(errCoinInvalidDescr)
 				}
 				err = fErr
@@ -62,78 +59,23 @@ func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 			return
 		}
 
-		// uppercase coin name
-		params.Coin = strings.ToUpper(params.Coin)
-
 		// extract user id
 		userID, err := getUserID(c)
 		if err != nil {
 			return
 		}
 
-		// validate name name
-		_, err = models.GetCoin(d, params.Coin)
+		// create wallet
+		wallet, err := api.CreateWallet(userID, params.Coin, params.WalletName)
+
 		if err != nil {
-			if err == models.ErrNoSuchCoin {
+			// coerce error
+			switch err {
+			case errs.ErrNoSuchCoin:
 				err = errCoinInvalid
+			case errs.ErrWalletCreationRejected:
+				err = errWalletOfSuchCoinAlreadyExists
 			}
-			return
-		}
-
-		// validate name and get generator for specific name using coordinator
-		generator, err := coordinator.Generator(params.Coin)
-		if err != nil {
-			if err == nodes.ErrNoSuchCoin {
-				err = errCoinInvalid
-			}
-			return
-		}
-
-		var wallet models.Wallet
-		err = d.Tx(func(tx db.ITx) (err error) {
-			// since we wouldn't allow an user to create multiple wallets of
-			// same name here we relies onto unique user/name constraint
-			// so concurrent attempt to create next wallets with duplicated pairs
-			// will be locked until first occurred transaction will be committed (in such case
-			// constraint violation will occurs) or rollbacked (in such case wallet will be successfully
-			// inserted)
-			//
-			// while other transactions hungs on this call we may safely generate wallet address (we sure
-			// that no concurrent call on same user/name pair will occurs between insert and update, also
-			// commit will be successful)
-			//
-			// TODO commit may be failed due to connection issues (for example), so wallet address will be generated, but no appropriate record occurs
-			wallet, err = models.CreateWallet(
-				tx, models.Wallet{
-					UserID: userID,
-					Coin: models.Coin{
-						ShortName: params.Coin,
-					},
-					Name: fmt.Sprintf("%s wallet", strings.ToUpper(params.Coin)),
-				},
-			)
-			if err != nil {
-				switch err {
-				case models.ErrNoSuchCoin:
-					err = errCoinInvalid
-				case models.ErrWalletCreationRejected:
-					err = errWalletOfSuchCoinAlreadyExists
-				}
-				return
-			}
-
-			// after wallet was successfully created we may generate new wallet address
-			wallet.Address, err = generator.Create()
-			if err != nil {
-				return
-			}
-
-			// then update wallet to new address
-			err = models.UpdateWallet(tx, wallet.ID, &models.WalletDiff{Address: &wallet.Address})
-
-			return
-		})
-		if err != nil {
 			return
 		}
 
@@ -147,7 +89,7 @@ func CreateFactory(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 
 // GetFactory creates handler which used to query wallet which is specified by path param 'wallet_id', returns
 // 'Response' on success.
-func GetFactory(d *db.Db) base.HandlerFunc {
+func GetFactory(api *wallets.Api) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		// parse wallet id path param
 		walletID, walletIDValid := parseWalletIDView(c.Param("wallet_id"))
@@ -162,13 +104,10 @@ func GetFactory(d *db.Db) base.HandlerFunc {
 			return
 		}
 
-		var wallet models.Wallet
-		err = d.Tx(func(tx db.ITx) error {
-			wallet, err = models.GetWallet(tx, userID, walletID)
-			return err
-		})
+		// perform request
+		wallet, err := api.GetWallet(userID, walletID)
 		if err != nil {
-			if err == models.ErrNoSuchWallet {
+			if err == errs.ErrNoSuchWallet {
 				// invalid wallet id also set 404 error code
 				err = errWalletIDNotFound
 			}
@@ -182,22 +121,14 @@ func GetFactory(d *db.Db) base.HandlerFunc {
 }
 
 // GetAllFactory
-func GetAllFactory(d *db.Db) base.HandlerFunc {
+func GetAllFactory(api *wallets.Api) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		params := DefaultGetAllRequest()
 		// ignore error due to invalid query params just ignored
 		c.BindQuery(&params)
 
-		// map then to filters description
-		walletsFilters := models.GetWalletFilters{
-			ByCoin: params.ByCoin,
-			Count:  params.Count,
-		}
 		// parse cursor
-		fromID, valid := parseWalletIDView(params.Cursor)
-		if !valid {
-			walletsFilters.FromID = fromID
-		}
+		fromID, _ := parseWalletIDView(params.Cursor)
 
 		// extract user id
 		userID, err := getUserID(c)
@@ -205,13 +136,8 @@ func GetAllFactory(d *db.Db) base.HandlerFunc {
 			return
 		}
 
-		var wts []models.Wallet
-		var totalCount int64
-		var hasNext bool
-		err = d.Tx(func(tx db.ITx) error {
-			wts, totalCount, hasNext, err = models.GetWallets(tx, userID, walletsFilters)
-			return err
-		})
+		// query wallets
+		wts, totalCount, hasNext, err := api.GetWallets(userID, params.ByCoin, fromID, params.Count)
 		if err != nil {
 			return
 		}

@@ -1,23 +1,12 @@
-package models
+package queries
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/web-api/db"
 	"github.com/lib/pq"
 	"strings"
-)
-
-var (
-	// ErrNoSuchCoin returned when invalid coin name is specified
-	ErrNoSuchCoin = errors.New("such coin name is unexpected")
-
-	// ErrNoSuchWallet returned when no wallet found for specified criteria
-	ErrNoSuchWallet = errors.New("no such wallet found")
-
-	// ErrWalletCreationRejected returned when wallet connot be created due to specific values limitations
-	ErrWalletCreationRejected = errors.New("wallet creation rejected due to params")
 )
 
 const (
@@ -41,9 +30,9 @@ func CreateWallet(tx db.ITx, wallet Wallet) (newWallet Wallet, err error) {
 		if pgErr, ok := err.(*pq.Error); ok {
 			switch {
 			case pgErr.Column == "coin_id" || pgErr.Code == notNullViolationErrCode:
-				err = ErrNoSuchCoin
+				err = errs.ErrNoSuchCoin
 			case pgErr.Code == uniqueConstraintViolationErrCode:
-				err = ErrWalletCreationRejected
+				err = errs.ErrWalletCreationRejected
 			}
 		}
 		if err == sql.ErrNoRows {
@@ -154,7 +143,7 @@ func GetWallet(tx db.ITx, userID int64, walletID int64, forUpdate ...bool) (wall
 		walletID, userID,
 	), &wallet)
 	if err == sql.ErrNoRows {
-		err = ErrNoSuchWallet
+		err = errs.ErrNoSuchWallet
 	}
 	return
 }
@@ -214,8 +203,8 @@ func GetWallets(tx db.ITx, userID int64, filters GetWalletFilters) (
 
 	// query total count
 	var lastIDWithCountRes struct {
-		Count  int64 `db:"count"`
-		LastID int64 `db:"last_id"`
+		Count  int64  `db:"count"`
+		LastID *int64 `db:"last_id"`
 	}
 	// detect has next flag by querying last wallet id with same where clause, if last id not equal to id of last select
 	// wallet that mean that there more to select
@@ -231,7 +220,7 @@ func GetWallets(tx db.ITx, userID int64, filters GetWalletFilters) (
 	}
 
 	totalCount = lastIDWithCountRes.Count
-	hasNext = lastIDWithCountRes.LastID != wallets[len(wallets)-1].ID
+	hasNext = lastIDWithCountRes.LastID != nil && *lastIDWithCountRes.LastID != wallets[len(wallets)-1].ID
 	return
 }
 
@@ -239,11 +228,34 @@ func GetWallets(tx db.ITx, userID int64, filters GetWalletFilters) (
 // case insensitive.
 func GetCoin(tx db.ITx, coinShortName string) (coin Coin, err error) {
 	err = tx.QueryRowx(
-		`SELECT id, name, short_name, enabled FROM coins WHERE short_name = $1`,
+		`SELECT id, name, short_name, enabled FROM coins WHERE short_name = $1 AND enabled = true`,
 		strings.ToUpper(coinShortName),
 	).StructScan(&coin)
 	if err == sql.ErrNoRows {
-		err = ErrNoSuchCoin
+		err = errs.ErrNoSuchCoin
+	}
+	return
+}
+
+// GetCoins gets all enabled coins
+func GetCoins(tx db.ITx) (coins []Coin, err error) {
+	rows, err := tx.Queryx(`SELECT id, name, short_name, enabled FROM coins WHERE enabled = true`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	// query coins
+	coins = make([]Coin, 0, 3)
+
+	// need to scan all wallets
+	for rows.Next() {
+		var coin Coin
+		err = rows.StructScan(&coin)
+		if err != nil {
+			return
+		}
+		coins = append(coins, coin)
 	}
 	return
 }

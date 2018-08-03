@@ -1,7 +1,7 @@
 package wallets
 
 import (
-	"git.zam.io/wallet-backend/wallet-api/pkg/models"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"strconv"
 	"strings"
 )
@@ -46,7 +46,7 @@ type AllResponse struct {
 }
 
 // ResponseFromWallet renders wallet view converting wallet id into string
-func ResponseFromWallet(wallet models.Wallet) Response {
+func ResponseFromWallet(wallet queries.Wallet) Response {
 	return Response{
 		Wallet: View{
 			ID:      getWalletIDView(wallet.ID),
@@ -58,7 +58,7 @@ func ResponseFromWallet(wallet models.Wallet) Response {
 }
 
 // AllResponseFromWallets prepares wallets representation
-func AllResponseFromWallets(wallets []models.Wallet, totalCount int64, hasNext bool) AllResponse {
+func AllResponseFromWallets(wallets []queries.Wallet, totalCount int64, hasNext bool) AllResponse {
 	views := make([]View, 0, len(wallets))
 	var next string
 	if len(wallets) > 0 && hasNext {

@@ -46,6 +46,7 @@ func Create(v *viper.Viper, cfg *config.RootScheme) cobra.Command {
 			e.SetIndent(" ", "\t")
 			return e.Encode(cfg)
 		},
+		TraverseChildren: true,
 	}
 
 	command.Flags().StringVarP(
