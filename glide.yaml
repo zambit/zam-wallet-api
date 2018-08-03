@@ -24,3 +24,5 @@ import:
   - source/file
 - package: github.com/lib/pq
 - package: github.com/jmoiron/sqlx
+- package: github.com/ericlagergren/decimal
+  version: v3.2

@@ -1,7 +1,8 @@
 package wallets
 
 import (
-	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
+	"github.com/ericlagergren/decimal"
 	"strconv"
 	"strings"
 )
@@ -27,10 +28,11 @@ func DefaultGetAllRequest() GetAllRequest {
 
 // View used to represent wallet model
 type View struct {
-	ID      string `json:"id"`
-	Coin    string `json:"name"`
-	Name    string `json:"wallet_name"`
-	Address string `json:"address"`
+	ID      string       `json:"id"`
+	Coin    string       `json:"name"`
+	Name    string       `json:"wallet_name"`
+	Address string       `json:"address"`
+	Balance *decimal.Big `json:"balance"`
 }
 
 // Response represents create and get wallets response
@@ -46,19 +48,20 @@ type AllResponse struct {
 }
 
 // ResponseFromWallet renders wallet view converting wallet id into string
-func ResponseFromWallet(wallet queries.Wallet) Response {
+func ResponseFromWallet(wallet wallets.WalletWithBalance) Response {
 	return Response{
 		Wallet: View{
 			ID:      getWalletIDView(wallet.ID),
 			Coin:    strings.ToLower(wallet.Coin.ShortName),
 			Name:    wallet.Name,
 			Address: wallet.Address,
+			Balance: wallet.Balance,
 		},
 	}
 }
 
 // AllResponseFromWallets prepares wallets representation
-func AllResponseFromWallets(wallets []queries.Wallet, totalCount int64, hasNext bool) AllResponse {
+func AllResponseFromWallets(wallets []wallets.WalletWithBalance, totalCount int64, hasNext bool) AllResponse {
 	views := make([]View, 0, len(wallets))
 	var next string
 	if len(wallets) > 0 && hasNext {

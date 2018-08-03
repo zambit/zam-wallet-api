@@ -10,13 +10,13 @@ import (
 )
 
 var (
-	ErrNoSuchCoin = errors.New("no such coin found")
+	ErrNoSuchCoin = errors.New("coordinator: no such coin found")
 
-	ErrCoinUnavailable = errors.New("coin processing unavailable")
+	ErrCoinUnavailable = errors.New("coordinator: coin processing unavailable")
 
-	ErrCoinIsUnsupported = errors.New("coin is unsupported")
+	ErrCoinIsUnsupported = errors.New("coordinator: coin is unsupported")
 
-	ErrCoinServiceNotImplemented = errors.New("coin service is not implemented")
+	ErrCoinServiceNotImplemented = errors.New("coordinator: coin service is not implemented")
 )
 
 // ICoordinator
@@ -29,8 +29,11 @@ type ICoordinator interface {
 	// Close closes all connections
 	Close() error
 
-	// Generator returns generator which belongs to a specific coin or ErrNoSuchCoin
+	// Generator returns generator which belongs to a specified coin or ErrNoSuchCoin
 	Generator(coinName string) (IGenerator, error)
+
+	// Observer returns wallet observer for specified coin or ErrNoSuchCoin
+	Observer(coinName string) (IWalletObserver, error)
 }
 
 // New creates new default coordinator
@@ -39,6 +42,7 @@ func New(logger logrus.FieldLogger) ICoordinator {
 		logger:     logger.WithField("module", "wallets.coordinator"),
 		closers:    make(map[string]io.Closer),
 		generators: make(map[string]IGenerator),
+		observers:  make(map[string]IWalletObserver),
 	}
 }
 
@@ -47,6 +51,7 @@ type coordinator struct {
 	logger     logrus.FieldLogger
 	closers    map[string]io.Closer
 	generators map[string]IGenerator
+	observers  map[string]IWalletObserver
 }
 
 // Dial lookup service provider registry, dial no safe with concurrent getters usage
@@ -67,6 +72,10 @@ func (c *coordinator) Dial(coinName string, host, user, pass string, testnet boo
 
 	if generator, ok := services.(IGenerator); ok {
 		c.generators[coinName] = generator
+	}
+
+	if observer, ok := services.(IWalletObserver); ok {
+		c.observers[coinName] = observer
 	}
 
 	return nil
@@ -99,4 +108,20 @@ func (c *coordinator) Generator(coinName string) (IGenerator, error) {
 	}
 
 	return generator, nil
+}
+
+// Generator implements ICoordinator interface
+func (c *coordinator) Observer(coinName string) (IWalletObserver, error) {
+	coinName = strings.ToUpper(coinName)
+
+	if _, ok := c.closers[coinName]; !ok {
+		return nil, ErrNoSuchCoin
+	}
+
+	observer, ok := c.observers[coinName]
+	if !ok {
+		return nil, ErrCoinServiceNotImplemented
+	}
+
+	return observer, nil
 }

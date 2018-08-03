@@ -2,8 +2,10 @@ package btc
 
 import (
 	"fmt"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/danields761/jsonrpc"
+	"github.com/ericlagergren/decimal"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -14,6 +16,8 @@ import (
 const (
 	defaultMainNetPort = 8332
 	defaultTestNetPort = 18332
+
+	rpcErrInvalidAddressCode = -5
 )
 
 // btcNode implements IGenerator interface for BTC/BCH nodes
@@ -22,6 +26,10 @@ type btcNode struct {
 	client    *http.Client
 	rpcClient jsonrpc.RPCClient
 }
+
+// interfaces compile-time validations
+var _ nodes.IGenerator = (*btcNode)(nil)
+var _ nodes.IWalletObserver = (*btcNode)(nil)
 
 // Dial creates client HTTP connection using passed params, also checks connectivity by sending "getwalletinfo" request.
 //
@@ -90,6 +98,36 @@ func (n *btcNode) Create() (address string, err error) {
 	return
 }
 
+// bigIntJSONView represent decimal.Big json representation
+type bigIntJSONView decimal.Big
+
+func (u *bigIntJSONView) UnmarshalJSON(data []byte) error {
+	var (
+		ok  bool
+		dst *decimal.Big
+	)
+	dst, ok = decimal.ContextUnlimited.SetString((*decimal.Big)(u), string(data))
+	if !ok {
+		return fmt.Errorf(`decimal: unable to parse string "%s"`, data)
+	}
+	*u = *(*bigIntJSONView)(dst)
+	return nil
+}
+
+// Balance returns wallet balance associated with given address using getreceivedbyaddress method
+func (n *btcNode) Balance(address string) (balance *decimal.Big, err error) {
+	var inputBalance bigIntJSONView
+	err = n.doCall("getreceivedbyaddress", &inputBalance, address)
+	if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
+		if rpcErr.Code == rpcErrInvalidAddressCode {
+			err = nodes.ErrAddressInvalid
+		}
+	}
+	casted := decimal.Big(inputBalance)
+	balance = &casted
+	return
+}
+
 // Ping node by calling getwalletinfo
 func (n *btcNode) Ping() error {
 	return n.doCall("getwalletinfo", nil)
@@ -99,7 +137,9 @@ func (n *btcNode) Ping() error {
 func (n *btcNode) doCall(method string, output interface{}, params ...interface{}) (err error) {
 	l := n.logger.WithField("method", method)
 
-	resp, err := n.rpcClient.Call(method)
+	l.WithField("params", params).WithField("method", method).Info("calling rpc")
+
+	resp, err := n.rpcClient.Call(method, params...)
 	if err == nil && resp.Error != nil {
 		err = resp.Error
 	}
