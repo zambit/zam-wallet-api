@@ -237,9 +237,11 @@ func GetCoin(tx db.ITx, coinShortName string) (coin Coin, err error) {
 	return
 }
 
-// GetCoins gets all enabled coins
-func GetCoins(tx db.ITx) (coins []Coin, err error) {
-	rows, err := tx.Queryx(`SELECT id, name, short_name, enabled FROM coins WHERE enabled = true`)
+// GetCoins gets all coins which created to the used by default
+func GetDefaultCoins(tx db.ITx) (coins []Coin, err error) {
+	q := `SELECT id, name, short_name, enabled FROM coins WHERE user_default = true AND enabled = true`
+
+	rows, err := tx.Queryx(q)
 	if err != nil {
 		return
 	}
@@ -257,6 +259,7 @@ func GetCoins(tx db.ITx) (coins []Coin, err error) {
 		}
 		coins = append(coins, coin)
 	}
+
 	return
 }
 
@@ -276,14 +279,5 @@ func scanWalletRow(row scannable, wallet *Wallet) error {
 		&wallet.Coin.Name,
 		&wallet.Coin.ShortName,
 		&wallet.Coin.Enabled,
-	)
-}
-
-func scanCoinRow(row scannable, coin *Coin) error {
-	return row.Scan(
-		&coin.ID,
-		&coin.Name,
-		&coin.ShortName,
-		&coin.Enabled,
 	)
 }

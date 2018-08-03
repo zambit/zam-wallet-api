@@ -1,0 +1,1 @@
+alter table coins drop column user_default;

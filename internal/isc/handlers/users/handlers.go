@@ -28,9 +28,9 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		logger = logger.WithField("user_id", params.UserID)
 
 		// query available coins and create set
-		coins, err := queries.GetCoins(d)
+		coins, err := queries.GetDefaultCoins(d)
 		if err != nil {
-			logger.WithError(err).Error("enabled coins fetch failed")
+			logger.WithError(err).Error("default coins fetch failed")
 			return
 		}
 		coinsNamesSet := make(map[string]struct{})
@@ -58,12 +58,11 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 			// force default wallet name
 			_, cErr := api.CreateWallet(params.UserID, c.ShortName, "")
 			if cErr != nil {
-				logger.WithError(err).WithField("coin_name", c.ShortName).Error("wallet creation failed")
+				logger.WithError(cErr).WithField("coin_name", c.ShortName).Error("wallet creation failed")
 				errs = append(errs, cErr)
-				return
 			}
 		}
-		if errs != nil {
+		if errs != nil && len(errs) > 0 {
 			err = errors.MultiErrors(errs)
 		}
 
