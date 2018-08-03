@@ -8,6 +8,7 @@ import (
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
 	dbconf "git.zam.io/wallet-backend/web-api/config/db"
 	iscconf "git.zam.io/wallet-backend/web-api/config/isc"
+	webserverconf "git.zam.io/wallet-backend/web-api/config/server"
 	"git.zam.io/wallet-backend/web-api/pkg/providers"
 	"go.uber.org/dig"
 )
@@ -20,8 +21,24 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 	})
 
 	// provide configuration and her parts
-	utils.MustProvide(c, func() (config.RootScheme, dbconf.Scheme, iscconf.Scheme, serverconf.Scheme, walletsconf.Scheme) {
-		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets
+	utils.MustProvide(c, func() (
+		config.RootScheme,
+		dbconf.Scheme,
+		iscconf.Scheme,
+		serverconf.Scheme,
+		walletsconf.Scheme,
+		webserverconf.Scheme,
+	) {
+		servConf := cfg.Server
+		wservConf := webserverconf.Scheme{
+			Host:    servConf.Host,
+			Port:    servConf.Port,
+			Storage: servConf.Storage,
+			JWT:     servConf.JWT,
+			Auth:    servConf.Auth,
+		}
+
+		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf
 	})
 
 	// provide root logger
