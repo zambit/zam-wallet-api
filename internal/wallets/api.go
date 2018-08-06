@@ -120,7 +120,7 @@ func (api *Api) GetWallets(userID int64, onlyCoin string, fromID, count int64) (
 	for i, rawWallet := range rawWts {
 		// because right now amount of wallets belongs to an user ~= 3-4, it's more expediently to run goroutines
 		// rather then use workers pool
-		go func() {
+		go func(i int, rawWallet queries.Wallet) {
 			defer wg.Done()
 
 			var err error
@@ -131,7 +131,7 @@ func (api *Api) GetWallets(userID int64, onlyCoin string, fromID, count int64) (
 				return
 			}
 			wts[i] = wallet
-		}()
+		}(i, rawWallet)
 	}
 
 	// wait until all jobs done in separated goroutine

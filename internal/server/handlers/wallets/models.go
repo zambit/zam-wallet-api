@@ -2,7 +2,6 @@ package wallets
 
 import (
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
-	"github.com/ericlagergren/decimal"
 	"strconv"
 	"strings"
 )
@@ -29,10 +28,10 @@ func DefaultGetAllRequest() GetAllRequest {
 // View used to represent wallet model
 type View struct {
 	ID      string       `json:"id"`
-	Coin    string       `json:"name"`
+	Coin    string       `json:"coin"`
 	Name    string       `json:"wallet_name"`
 	Address string       `json:"address"`
-	Balance *decimal.Big `json:"balance"`
+	Balance *BalanceView `json:"balance"`
 }
 
 // Response represents create and get wallets response
@@ -55,7 +54,7 @@ func ResponseFromWallet(wallet wallets.WalletWithBalance) Response {
 			Coin:    strings.ToLower(wallet.Coin.ShortName),
 			Name:    wallet.Name,
 			Address: wallet.Address,
-			Balance: wallet.Balance,
+			Balance: (*BalanceView)(wallet.Balance),
 		},
 	}
 }
