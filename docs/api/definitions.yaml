@@ -168,25 +168,43 @@ AllTransactionsResponse:
               items:
                 $ref: "./index.yaml#/definitions/TransactionData"
 
+Errors:
+  allOf:
+    - $ref: "./index.yaml#/definitions/BaseResponse"
+    - type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            anyOf:
+              - $ref: './index.yaml#/definitions/FieldError'
+              - $ref: './index.yaml#/definitions/Error'
+        
 Error:
-  description: Describes error occurred while request
+  description: Error format which returned by handlers (usually internal errors)
+  type: object
   properties:
     message:
       type: string
-      description: Generally describes error
-    fields:
-      description: |
-        This field is presented in case when error is cause of missed, misstyped or wrong formatted request 
-        parameter passed throught POST JSON body, query or path
-      type: array
-      items:
-        properties:
-          name:
-            type: string
-            description: Name of parameter which occurs error
-          input:
-            type: string
-            description: Describes the way in which this parameter has come
-          message:
-            type: string
-            description: Describes what wrong with this field
+      description: Describes error
+
+FieldError:
+  type: object
+  description: |
+    This field is presented in case when error is cause of missed, misstyped or wrong formatted request 
+    parameter passed throught POST JSON body, query or path
+  properties:
+    message:
+      type: string
+      description: Describes what wrong with this field
+    name:
+      type: string
+      description: Name of parameter which occurs error
+    input:
+      type: string
+      description: Describes the way in which this parameter has come
+  required:
+    - message
+    - name
+    - input

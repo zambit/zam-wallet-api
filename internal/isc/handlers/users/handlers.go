@@ -1,7 +1,7 @@
 package users
 
 import (
-	"git.zam.io/wallet-backend/common/pkg/errors"
+	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/isc/handlers/base"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
@@ -53,17 +53,13 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		}
 
 		// create wallets for all enabled coins
-		var errs []error
 		for _, c := range coins {
 			// force default wallet name
 			_, cErr := api.CreateWallet(params.UserID, c.ShortName, "")
 			if cErr != nil {
 				logger.WithError(cErr).WithField("coin_name", c.ShortName).Error("wallet creation failed")
-				errs = append(errs, cErr)
+				err = merrors.Append(err, cErr)
 			}
-		}
-		if errs != nil && len(errs) > 0 {
-			err = errors.MultiErrors(errs)
 		}
 
 		return

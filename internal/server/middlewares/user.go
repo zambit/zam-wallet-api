@@ -9,14 +9,10 @@ import (
 
 var (
 	// ErrOnlyMePermitted
-	ErrOnlyMePermitted = base.NewErrorsView("").AddField(
-		"path", "user_id", `Only "me" value permitted for you`,
-	)
+	ErrOnlyMePermitted = base.NewFieldErr("path", "user_id", `Only "me" value permitted for you`)
 
 	// ErrWrongUserID
-	ErrWrongUserID = base.NewErrorsView("").AddField(
-		"path", "user_id", "Wrong value",
-	)
+	ErrWrongUserID = base.NewFieldErr("path", "user_id", "Wrong value")
 
 	// ErrMissingMeAuthInfo
 	ErrMissingMeAuthInfo = base.ErrorView{

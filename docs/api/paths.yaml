@@ -18,7 +18,7 @@
       default:
         description: In case of any error
         schema:
-          $ref: "./index.yaml#/definitions/Error"
+          $ref: "./index.yaml#/definitions/Errors"
   get:
     security:
       - Bearer: []
@@ -52,7 +52,7 @@
       default:
         description: In case of any error
         schema:
-          $ref: "./index.yaml#/definitions/Error"
+          $ref: "./index.yaml#/definitions/Errors"
 
 /user/me/wallets/{wallet_id}:
   parameters:
@@ -73,7 +73,7 @@
       default:
         description: In case of any error
         schema:
-          $ref: "./index.yaml#/definitions/Error"
+          $ref: "./index.yaml#/definitions/Errors"
 
 /user/me/txs:
   get:
@@ -124,7 +124,7 @@
       default:
         description: In case of any error
         schema:
-          $ref: "./index.yaml#/definitions/Error"
+          $ref: "./index.yaml#/definitions/Errors"
   post:
     security:
       - Bearer: []
@@ -160,4 +160,4 @@
       default:
         description: In case of any error
         schema:
-          $ref: "./index.yaml#/definitions/Error"
+          $ref: "./index.yaml#/definitions/Errors"

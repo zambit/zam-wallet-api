@@ -2,7 +2,7 @@ package wallets
 
 import (
 	"fmt"
-	"git.zam.io/wallet-backend/common/pkg/errors"
+	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"git.zam.io/wallet-backend/web-api/db"
@@ -141,15 +141,9 @@ func (api *Api) GetWallets(userID int64, onlyCoin string, fromID, count int64) (
 	}()
 
 	//
-	var errs []error
 	for queryErr := range errsChan {
-		errs = append(errs, queryErr)
+		err = merrors.Append(err, queryErr)
 	}
-	if errs != nil {
-		err = errors.MultiErrors(errs)
-		return
-	}
-
 	return
 }
 

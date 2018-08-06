@@ -1,7 +1,7 @@
 package base
 
 import (
-	"git.zam.io/wallet-backend/common/pkg/errors"
+	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/web-api/pkg/services/broker"
 	"github.com/segmentio/objconv/json"
 )
@@ -28,7 +28,7 @@ func WrapHandler(handler HandlerFunc) broker.ConsumeFunc {
 			if err != nil {
 				rejErr := delivery.Reject()
 				if rejErr != nil {
-					return errors.MultiErrors{err, rejErr}
+					return merrors.Errors{err, rejErr}
 				}
 				return err
 			}
@@ -41,7 +41,7 @@ func WrapHandler(handler HandlerFunc) broker.ConsumeFunc {
 		if err != nil {
 			nackErr := delivery.Nack()
 			if nackErr != nil {
-				return errors.MultiErrors{err, nackErr}
+				return merrors.Errors{err, nackErr}
 			}
 			return err
 		}
@@ -55,7 +55,7 @@ func WrapHandler(handler HandlerFunc) broker.ConsumeFunc {
 			}
 		}
 		if pubErrs != nil {
-			return errors.MultiErrors(pubErrs)
+			return merrors.Errors(pubErrs)
 		}
 
 		// mark message as successful

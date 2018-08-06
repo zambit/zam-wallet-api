@@ -2,7 +2,7 @@ package nodes
 
 import (
 	"errors"
-	errors2 "git.zam.io/wallet-backend/common/pkg/errors"
+	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/sirupsen/logrus"
 	"io"
@@ -82,16 +82,15 @@ func (c *coordinator) Dial(coinName string, host, user, pass string, testnet boo
 }
 
 // Close implements ICoordinator interface
-func (c *coordinator) Close() error {
-	var errs []error
+func (c *coordinator) Close() (err error) {
 	for _, closer := range c.closers {
-		err := closer.Close()
-		if err != nil {
-			errs = append(errs, err)
+		cErr := closer.Close()
+		if cErr != nil {
+			err = merrors.Append(err, cErr)
 		}
 	}
 
-	return errors2.MultiErrors(errs)
+	return
 }
 
 // Generator implements ICoordinator interface

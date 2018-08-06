@@ -1,6 +1,7 @@
 package wallets
 
 import (
+	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
@@ -14,25 +15,11 @@ var (
 		Code:    http.StatusInternalServerError,
 		Message: "user middleware is missing",
 	}
-	errWalletIDInvalid = base.NewErrorsView("").AddField(
-		"path", "wallet_id", "wallet id invalid",
-	)
-	errWalletIDNotFound = base.NewErrorsView("").AddField(
-		"path", "wallet_id", "wallet not found",
-	)
-	errWalletOfSuchCoinAlreadyExists = base.NewErrorsView("").AddField(
-		"body", "coin", "wallet of such coin already exists",
-	)
-	errCoinInvalidDescr = base.FieldErrorDescr{
-		Name: "coin", Input: "body", Message: "invalid coin name",
-	}
-	errCoinInvalid = base.NewErrorsView("").AddFieldDescr(errCoinInvalidDescr)
+	errWalletIDInvalid               = base.NewFieldErr("path", "wallet_id", "wallet id invalid")
+	errWalletIDNotFound              = base.NewFieldErr("path", "wallet_id", "wallet not found")
+	errWalletOfSuchCoinAlreadyExists = base.NewFieldErr("body", "coin", "wallet of such coin already exists")
+	errCoinInvalid                   = base.NewFieldErr("body", "coin", "invalid coin name")
 )
-
-func init() {
-	// do it with init func due to bad base errors design, anyway it will be reworked soon
-	errWalletIDNotFound.Code = http.StatusNotFound
-}
 
 // CreateFactory creates handler which used to create wallet, accepting 'CreateRequest' like scheme and returns
 // 'Response' on success.
@@ -40,21 +27,15 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		// bind params
 		params := CreateRequest{}
-		fErr, err := base.ShouldBindJSON(c, &params)
+		err = base.ShouldBindJSON(c, &params)
 		if err != nil {
-			lookupCoinErr := true
-			for _, f := range fErr.Fields {
-				if f.Name == "coin" {
-					lookupCoinErr = false
-					break
+			if base.HaveFieldErr(err, "coin") {
+				cErr := api.ValidateCoin(params.Coin)
+				if cErr == errs.ErrNoSuchCoin {
+					err = merrors.Append(err, errCoinInvalid)
+				} else if cErr != nil {
+					err = cErr
 				}
-			}
-			if lookupCoinErr {
-				err = api.ValidateCoin(params.Coin)
-				if err == errs.ErrNoSuchCoin {
-					fErr.AddFieldDescr(errCoinInvalidDescr)
-				}
-				err = fErr
 			}
 			return
 		}

@@ -68,20 +68,25 @@ var _ = Describe("testings /wallets endpoints", func() {
 	database.Init()
 	migrations.Init()
 
+	BeforeEachCProvide(func(c *mocks.ICoordinator) (*mocks.IGenerator, nodes.IGenerator) {
+		g := &mocks.IGenerator{}
+		c.On("Generator", mock.Anything).Return(g, nil)
+		return g, g
+	})
+	BeforeEachCProvide(func(c *mocks.ICoordinator) (*mocks.IWalletObserver, nodes.IWalletObserver) {
+		o := &mocks.IWalletObserver{}
+		c.On("Observer", mock.Anything).Return(o, nil)
+		return o, o
+	})
+	BeforeEachCProvide(func() (*mocks.ICoordinator, nodes.ICoordinator) {
+		c := &mocks.ICoordinator{}
+		return c, c
+	})
+
 	Context("when creating wallet", func() {
 		const (
 			userID = 100
 		)
-
-		BeforeEachCProvide(func() (*mocks.IGenerator, nodes.IGenerator) {
-			g := &mocks.IGenerator{}
-			return g, g
-		})
-		BeforeEachCProvide(func(generator *mocks.IGenerator) (*mocks.ICoordinator, nodes.ICoordinator) {
-			c := &mocks.ICoordinator{}
-			c.On("Generator", mock.Anything).Return(generator, nil)
-			return c, c
-		})
 
 		BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
 			return CreateFactory(wallets.NewApi(d, coordinator))
@@ -126,11 +131,11 @@ var _ = Describe("testings /wallets endpoints", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(resp).To(BeNil())
 			Expect(err).To(Equal(
-				base.NewErrorsView("").AddField("body", "coin", "invalid coin name"),
+				base.NewFieldErr("body", "coin", "invalid coin name"),
 			))
 		})
 
-		ItD("should reject wallet creation due to wallet duplication", func(d *db.Db, handler base.HandlerFunc) {
+		ItD("should reject wallet creation due to wallet duplication", func(d *db.Db, handler base.HandlerFunc, generator *mocks.IGenerator) {
 			By("manually creating first wallet")
 			_, err := queries.CreateWallet(d, queries.Wallet{
 				UserID: userID,
@@ -147,7 +152,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(resp).To(BeNil())
 			Expect(err).To(Equal(
-				base.NewErrorsView("").AddField("body", "coin", "wallet of such coin already exists"),
+				base.NewFieldErr("body", "coin", "wallet of such coin already exists"),
 			))
 		})
 	})
@@ -196,8 +201,9 @@ var _ = Describe("testings /wallets endpoints", func() {
 		})
 
 		Context("when querying multiple wallets", func() {
-			BeforeEachCProvide(func(d *db.Db) base.HandlerFunc {
-				return GetAllFactory(wallets.NewApi(d, nil))
+			BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator, observer *mocks.IWalletObserver) base.HandlerFunc {
+				observer.On("Balance", mock.Anything).Return(nil, nil).Times(10)
+				return GetAllFactory(wallets.NewApi(d, coordinator))
 			})
 
 			ItD("should return all rows due to no filters", func(handler base.HandlerFunc, btcWIDs btcWIDsT, ethWIDs ethWIDsT) {
