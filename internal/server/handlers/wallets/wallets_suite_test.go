@@ -28,7 +28,7 @@ func TestWallets(t *testing.T) {
 	RunSpecs(t, "Wallets Suite")
 }
 
-func createContextWithUserID(body interface{}, userID int64) *gin.Context {
+func createContextWithUserID(body interface{}, userID string) *gin.Context {
 	bytes, err := json.Marshal(body)
 	Expect(err).NotTo(HaveOccurred())
 	req, _ := http.NewRequest("POST", "nomatter", strings.NewReader(string(bytes)))
@@ -36,11 +36,11 @@ func createContextWithUserID(body interface{}, userID int64) *gin.Context {
 	c := &gin.Context{
 		Request: req,
 	}
-	c.Set("user_id", userID)
+	c.Set("user_phone", userID)
 	return c
 }
 
-func createContextWithQueryParams(userID int64, params ...interface{}) *gin.Context {
+func createContextWithQueryParams(userID string, params ...interface{}) *gin.Context {
 	if len(params)%2 != 0 {
 		panic("odd count of params is required")
 	}
@@ -59,7 +59,7 @@ func createContextWithQueryParams(userID int64, params ...interface{}) *gin.Cont
 	c := &gin.Context{
 		Request: req,
 	}
-	c.Set("user_id", userID)
+	c.Set("user_phone", userID)
 	return c
 }
 
@@ -85,7 +85,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 	Context("when creating wallet", func() {
 		const (
-			userID = 100
+			userPhone = "+79771234567"
 		)
 
 		BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
@@ -99,7 +99,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			resp, code, err := handler(createContextWithUserID(map[string]interface{}{
 				"coin":        "btc",
 				"wallet_name": "test wallet",
-			}, userID))
+			}, userPhone))
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(code).To(Equal(201))
@@ -116,7 +116,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			By("ensuring db state")
 			wID, err := strconv.ParseInt(walletResponse.ID, 10, 64)
 			Expect(err).NotTo(HaveOccurred())
-			w, err := queries.GetWallet(d, userID, wID)
+			w, err := queries.GetWallet(d, userPhone, wID)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w.Address).To(Equal(generatedAddress))
 		})
@@ -127,7 +127,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			resp, _, err := handler(createContextWithUserID(map[string]interface{}{
 				"coin":        "NOTVALIDCOIN",
 				"wallet_name": "test wallet",
-			}, userID))
+			}, userPhone))
 			Expect(err).To(HaveOccurred())
 			Expect(resp).To(BeNil())
 			Expect(err).To(Equal(
@@ -138,7 +138,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 		ItD("should reject wallet creation due to wallet duplication", func(d *db.Db, handler base.HandlerFunc, generator *mocks.IGenerator) {
 			By("manually creating first wallet")
 			_, err := queries.CreateWallet(d, queries.Wallet{
-				UserID: userID,
+				UserPhone: userPhone,
 				Coin: queries.Coin{
 					ShortName: "btc",
 				},
@@ -148,7 +148,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 			By("performing query")
 			resp, _, err := handler(createContextWithUserID(map[string]interface{}{
 				"coin": "btc",
-			}, userID))
+			}, userPhone))
 			Expect(err).To(HaveOccurred())
 			Expect(resp).To(BeNil())
 			Expect(err).To(Equal(
@@ -162,7 +162,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 	}
 
 	Context("when getting wallets", func() {
-		var userID int64 = 10
+		var userID = "+79761234567"
 		type btcWIDsT []string
 		type ethWIDsT []string
 		BeforeEachCProvide(func(d *db.Db) (btcWIDs btcWIDsT, ethWIDs ethWIDsT) {
@@ -176,8 +176,8 @@ var _ = Describe("testings /wallets endpoints", func() {
 			// create btc wallets
 			for i := 0; i < 5; i++ {
 				w, e := queries.CreateWallet(d, queries.Wallet{
-					UserID: userID,
-					Coin:   queries.Coin{ShortName: "BTC"}},
+					UserPhone: userID,
+					Coin:      queries.Coin{ShortName: "BTC"}},
 				)
 				Expect(e).NotTo(HaveOccurred())
 				btcWIDs = append(btcWIDs, idToView(w.ID))
@@ -186,8 +186,8 @@ var _ = Describe("testings /wallets endpoints", func() {
 			// create eth wallets
 			for i := 0; i < 5; i++ {
 				w, e := queries.CreateWallet(d, queries.Wallet{
-					UserID: userID,
-					Coin:   queries.Coin{ShortName: "ETH"}},
+					UserPhone: userID,
+					Coin:      queries.Coin{ShortName: "ETH"}},
 				)
 				Expect(e).NotTo(HaveOccurred())
 				ethWIDs = append(ethWIDs, idToView(w.ID))

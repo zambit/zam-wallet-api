@@ -17,14 +17,14 @@ const (
 // CreateWallet creates wallet using wallet internal coin short name to lookup appropriate coin id, if there is no such
 // coin with given short name (note: coin short name is case insensitive), ErrNoSuchCoin will be returned.
 //
-// Also in attempt to create wallet which broke unique user_id and coin_id constraint, ErrWalletCreationRejected
+// Also in attempt to create wallet which broke unique user_phone and coin_id constraint, ErrWalletCreationRejected
 // will be returned.
 func CreateWallet(tx db.ITx, wallet Wallet) (newWallet Wallet, err error) {
 	err = tx.QueryRowx(
-		`INSERT INTO wallets (name, user_id, address, coin_id)
+		`INSERT INTO wallets (name, user_phone, address, coin_id)
          VALUES ($1, $2, $3, (SELECT id FROM coins WHERE short_name = $4 AND enabled = true))
          RETURNING id`,
-		wallet.Name, wallet.UserID, wallet.Address, strings.ToUpper(wallet.Coin.ShortName),
+		wallet.Name, wallet.UserPhone, wallet.Address, strings.ToUpper(wallet.Coin.ShortName),
 	).Scan(&wallet.ID)
 	if err != nil {
 		if pgErr, ok := err.(*pq.Error); ok {
@@ -116,7 +116,7 @@ const (
 	baseSelectWalletsRequest = `
 SELECT
 	wallets.id,
-	wallets.user_id,
+	wallets.user_phone,
 	wallets.coin_id, 
 	wallets.name, 
 	wallets.address,
@@ -132,15 +132,15 @@ INNER JOIN coins ON coins.id = wallets.coin_id`
 )
 
 // GetWallet
-func GetWallet(tx db.ITx, userID int64, walletID int64, forUpdate ...bool) (wallet Wallet, err error) {
+func GetWallet(tx db.ITx, userPhone string, walletID int64, forUpdate ...bool) (wallet Wallet, err error) {
 	forUpdateClause := ""
 	if len(forUpdate) > 0 && forUpdate[0] {
 		forUpdateClause = " FOR UPDATE"
 	}
 
 	err = scanWalletRow(tx.QueryRowx(
-		baseSelectWalletsRequest+` WHERE wallets.id = $1 AND wallets.user_id = $2::bigint `+forUpdateClause,
-		walletID, userID,
+		baseSelectWalletsRequest+` WHERE wallets.id = $1 AND wallets.user_phone = $2 `+forUpdateClause,
+		walletID, userPhone,
 	), &wallet)
 	if err == sql.ErrNoRows {
 		err = errs.ErrNoSuchWallet
@@ -156,13 +156,13 @@ type GetWalletFilters struct {
 }
 
 // GetWallets
-func GetWallets(tx db.ITx, userID int64, filters GetWalletFilters) (
+func GetWallets(tx db.ITx, userPhone string, filters GetWalletFilters) (
 	wallets []Wallet, totalCount int64, hasNext bool, err error,
 ) {
 	// prepare where clause
-	whereClause := " WHERE wallets.user_id = :user_id ::::bigint"
+	whereClause := " WHERE wallets.user_phone = :user_phone"
 	limitClause := ""
-	whereArgs := map[string]interface{}{"user_id": userID}
+	whereArgs := map[string]interface{}{"user_phone": userPhone}
 
 	if filters.ByCoin != "" {
 		// apply coin filter
@@ -270,7 +270,7 @@ type scannable interface {
 func scanWalletRow(row scannable, wallet *Wallet) error {
 	return row.Scan(
 		&wallet.ID,
-		&wallet.UserID,
+		&wallet.UserPhone,
 		&wallet.CoinID,
 		&wallet.Name,
 		&wallet.Address,

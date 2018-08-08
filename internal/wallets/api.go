@@ -23,7 +23,7 @@ func NewApi(d *db.Db, coordinator nodes.ICoordinator) *Api {
 }
 
 // CreateWallet creates wallet both in db and blockchain node and assigns actual address
-func (api *Api) CreateWallet(userID int64, coinName, walletName string) (wallet WalletWithBalance, err error) {
+func (api *Api) CreateWallet(userPhone string, coinName, walletName string) (wallet WalletWithBalance, err error) {
 	// uppercase coin name because everywhere coin short name used in such format
 	coinName = strings.ToUpper(coinName)
 
@@ -54,7 +54,7 @@ func (api *Api) CreateWallet(userID int64, coinName, walletName string) (wallet 
 	err = api.database.Tx(func(tx db.ITx) (err error) {
 		wallet.Wallet, err = queries.CreateWallet(
 			tx, queries.Wallet{
-				UserID: userID,
+				UserPhone: userPhone,
 				Coin: queries.Coin{
 					ShortName: coinName,
 				},
@@ -80,9 +80,9 @@ func (api *Api) CreateWallet(userID int64, coinName, walletName string) (wallet 
 }
 
 // GetWallet returns wallet of given id
-func (api *Api) GetWallet(userID, walletID int64) (wallet WalletWithBalance, err error) {
+func (api *Api) GetWallet(userPhone string, walletID int64) (wallet WalletWithBalance, err error) {
 	err = api.database.Tx(func(tx db.ITx) error {
-		wallet.Wallet, err = queries.GetWallet(tx, userID, walletID)
+		wallet.Wallet, err = queries.GetWallet(tx, userPhone, walletID)
 		return err
 	})
 	if err != nil {
@@ -96,12 +96,12 @@ func (api *Api) GetWallet(userID, walletID int64) (wallet WalletWithBalance, err
 }
 
 // GetWallets returns all wallets which belongs to a specific user applying filter and pagination params
-func (api *Api) GetWallets(userID int64, onlyCoin string, fromID, count int64) (
+func (api *Api) GetWallets(userPhone string, onlyCoin string, fromID, count int64) (
 	wts []WalletWithBalance, totalCount int64, hasNext bool, err error,
 ) {
 	var rawWts []queries.Wallet
 	err = api.database.Tx(func(tx db.ITx) error {
-		rawWts, totalCount, hasNext, err = queries.GetWallets(tx, userID, queries.GetWalletFilters{
+		rawWts, totalCount, hasNext, err = queries.GetWallets(tx, userPhone, queries.GetWalletFilters{
 			ByCoin: onlyCoin,
 			FromID: fromID,
 			Count:  count,

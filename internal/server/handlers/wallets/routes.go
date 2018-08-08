@@ -21,7 +21,7 @@ type Dependencies struct {
 // Register
 func Register(dependencies Dependencies) error {
 	group := dependencies.Routes.Group(
-		"/user/:user_id/",
+		"/user/:user_phone/",
 		dependencies.AuthMiddleware,
 		dependencies.UserMiddleware,
 	)

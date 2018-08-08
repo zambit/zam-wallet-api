@@ -12,18 +12,17 @@ import (
 // UserMiddleware
 func UserMiddleware(sessStorage sessions.IStorage) gin.HandlerFunc {
 	return base.WrapMiddleware(wmiddlewares.UserMiddlewareFactory(
-		func(c context.Context) (userID int64, present bool, valid bool) {
+		func(c context.Context) (userPhone string, present bool, valid bool) {
 			user := middlewares.GetUserDataFromContext(c.(*gin.Context))
 
-			rawID, present := user["id"]
+			rawID, present := user["phone"]
 			if !present {
 				return
 			}
-			fID, valid := rawID.(float64)
+			userPhone, valid = rawID.(string)
 			if !valid {
 				return
 			}
-			userID = int64(fID)
 			return
 		},
 	))

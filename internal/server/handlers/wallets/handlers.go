@@ -41,7 +41,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 		}
 
 		// extract user id
-		userID, err := getUserID(c)
+		userID, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
@@ -80,7 +80,7 @@ func GetFactory(api *wallets.Api) base.HandlerFunc {
 		}
 
 		// extract user id
-		userID, err := getUserID(c)
+		userID, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
@@ -112,7 +112,7 @@ func GetAllFactory(api *wallets.Api) base.HandlerFunc {
 		fromID, _ := parseWalletIDView(params.Cursor)
 
 		// extract user id
-		userID, err := getUserID(c)
+		userID, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
@@ -130,9 +130,9 @@ func GetAllFactory(api *wallets.Api) base.HandlerFunc {
 }
 
 // utils
-// getUserID extracts user id from context which must be attached by user middleware
-func getUserID(c *gin.Context) (userID int64, err error) {
-	userID, presented := middlewares.GetUserIDFromContext(c)
+// getUserPhone extracts user id from context which must be attached by user middleware
+func getUserPhone(c *gin.Context) (userPhone string, err error) {
+	userPhone, presented := middlewares.GetUserPhoneFromContext(c)
 	if !presented {
 		err = errUserMiddlewareMissing
 	}

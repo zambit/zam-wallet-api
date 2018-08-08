@@ -25,7 +25,7 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 			return
 		}
 
-		logger = logger.WithField("user_id", params.UserID)
+		logger = logger.WithField("user_phone", params.UserPhone)
 
 		// query available coins and create set
 		coins, err := queries.GetDefaultCoins(d)
@@ -39,7 +39,7 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		}
 
 		// query already created wallets
-		wts, _, _, err := api.GetWallets(params.UserID, "", 0, 0)
+		wts, _, _, err := api.GetWallets(params.UserPhone, "", 0, 0)
 		if err != nil {
 			logger.WithError(err).Error("user wallets query failed")
 			return
@@ -55,7 +55,7 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		// create wallets for all enabled coins
 		for _, c := range coins {
 			// force default wallet name
-			_, cErr := api.CreateWallet(params.UserID, c.ShortName, "")
+			_, cErr := api.CreateWallet(params.UserPhone, c.ShortName, "")
 			if cErr != nil {
 				logger.WithError(cErr).WithField("coin_name", c.ShortName).Error("wallet creation failed")
 				err = merrors.Append(err, cErr)

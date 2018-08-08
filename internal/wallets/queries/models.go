@@ -17,7 +17,7 @@ type Wallet struct {
 	ID   int64  `db:"id"`
 	Name string `db:"name"`
 
-	UserID int64 `db:"user_id"`
+	UserPhone string `db:"user_phone"`
 
 	Address string `db:"address"`
 
