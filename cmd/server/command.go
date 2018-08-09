@@ -5,6 +5,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/cmd/common"
 	"git.zam.io/wallet-backend/wallet-api/config"
 	internalproviders "git.zam.io/wallet-backend/wallet-api/internal/providers"
+	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/txs"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/btc"
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
@@ -60,6 +61,7 @@ func serverMain(cfg config.RootScheme) (err error) {
 	// register handlers
 	utils.MustInvoke(c, static.Register)
 	utils.MustInvoke(c, wallets.Register)
+	utils.MustInvoke(c, txs.Register)
 
 	// Run server!
 	utils.MustInvoke(c, func(engine *gin.Engine) error {

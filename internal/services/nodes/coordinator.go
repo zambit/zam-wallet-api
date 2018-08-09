@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"context"
 	"errors"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
@@ -12,14 +13,14 @@ import (
 var (
 	ErrNoSuchCoin = errors.New("coordinator: no such coin found")
 
-	ErrCoinUnavailable = errors.New("coordinator: coin processing unavailable")
-
 	ErrCoinIsUnsupported = errors.New("coordinator: coin is unsupported")
 
 	ErrCoinServiceNotImplemented = errors.New("coordinator: coin service is not implemented")
 )
 
-// ICoordinator
+// ICoordinator coordinates nodes rpc wrappers which split into different interfaces which may be accessed usign special
+// calls such as Generator, Observer etc. It panics with ErrNoSuchCoin if no such coin registered. Also this methods
+// is case insensitive.
 type ICoordinator interface {
 	// Dial coin for given params and add coin services to this coordinator
 	//
@@ -32,26 +33,37 @@ type ICoordinator interface {
 	// Generator returns generator which belongs to a specified coin or ErrNoSuchCoin
 	Generator(coinName string) (IGenerator, error)
 
-	// Observer returns wallet observer for specified coin or ErrNoSuchCoin
-	Observer(coinName string) (IWalletObserver, error)
+	// Observer returns wallet observer for specified coin.
+	Observer(coinName string) IWalletObserver
+
+	// ObserverWithCtx same as Observer, but attaches given context
+	ObserverWithCtx(ctx context.Context, coinName string) IWalletObserver
+
+	// AccountObserver returns account observer for specific coin.
+	AccountObserver(coinName string) IAccountObserver
+
+	// AccountObserver same as AccountObserver, but attaches given context
+	AccountObserverWithCtx(ctx context.Context, coinName string) IAccountObserver
 }
 
 // New creates new default coordinator
 func New(logger logrus.FieldLogger) ICoordinator {
 	return &coordinator{
-		logger:     logger.WithField("module", "wallets.coordinator"),
-		closers:    make(map[string]io.Closer),
-		generators: make(map[string]IGenerator),
-		observers:  make(map[string]IWalletObserver),
+		logger:           logger.WithField("module", "wallets.coordinator"),
+		closers:          make(map[string]io.Closer),
+		generators:       make(map[string]IGenerator),
+		observers:        make(map[string]IWalletObserver),
+		accountObservers: make(map[string]IAccountObserver),
 	}
 }
 
 // coordinator implements ICoordinator in straight way
 type coordinator struct {
-	logger     logrus.FieldLogger
-	closers    map[string]io.Closer
-	generators map[string]IGenerator
-	observers  map[string]IWalletObserver
+	logger           logrus.FieldLogger
+	closers          map[string]io.Closer
+	generators       map[string]IGenerator
+	observers        map[string]IWalletObserver
+	accountObservers map[string]IAccountObserver
 }
 
 // Dial lookup service provider registry, dial no safe with concurrent getters usage
@@ -76,6 +88,10 @@ func (c *coordinator) Dial(coinName string, host, user, pass string, testnet boo
 
 	if observer, ok := services.(IWalletObserver); ok {
 		c.observers[coinName] = observer
+	}
+
+	if observer, ok := services.(IAccountObserver); ok {
+		c.accountObservers[coinName] = observer
 	}
 
 	return nil
@@ -110,17 +126,41 @@ func (c *coordinator) Generator(coinName string) (IGenerator, error) {
 }
 
 // Generator implements ICoordinator interface
-func (c *coordinator) Observer(coinName string) (IWalletObserver, error) {
+func (c *coordinator) ObserverWithCtx(ctx context.Context, coinName string) IWalletObserver {
 	coinName = strings.ToUpper(coinName)
 
 	if _, ok := c.closers[coinName]; !ok {
-		return nil, ErrNoSuchCoin
+		panic(ErrNoSuchCoin)
 	}
 
 	observer, ok := c.observers[coinName]
 	if !ok {
-		return nil, ErrCoinServiceNotImplemented
+		return retErrWalletObserver{e: ErrCoinServiceNotImplemented}
+	}
+	return observer.WithContext(ctx).(IWalletObserver)
+}
+
+// Observer implements ICoordinator interface
+func (c *coordinator) Observer(coinName string) IWalletObserver {
+	return c.ObserverWithCtx(context.Background(), coinName)
+}
+
+// AccountObserver implements ICoordinator interface
+func (c *coordinator) AccountObserver(coinName string) IAccountObserver {
+	return c.AccountObserverWithCtx(context.Background(), coinName)
+}
+
+// AccountObserverWithCtx implements ICoordinator interface
+func (c *coordinator) AccountObserverWithCtx(ctx context.Context, coinName string) IAccountObserver {
+	coinName = strings.ToUpper(coinName)
+
+	if _, ok := c.closers[coinName]; !ok {
+		panic(ErrNoSuchCoin)
 	}
 
-	return observer, nil
+	observer, ok := c.accountObservers[coinName]
+	if !ok {
+		return retErrAccountObserver{e: ErrCoinServiceNotImplemented}
+	}
+	return observer.WithContext(ctx).(IAccountObserver)
 }

@@ -1,6 +1,7 @@
 package btc
 
 import (
+	"context"
 	"fmt"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
@@ -30,6 +31,7 @@ type btcNode struct {
 // interfaces compile-time validations
 var _ nodes.IGenerator = (*btcNode)(nil)
 var _ nodes.IWalletObserver = (*btcNode)(nil)
+var _ nodes.IAccountObserver = (*btcNode)(nil)
 
 // Dial creates client HTTP connection using passed params, also checks connectivity by sending "getwalletinfo" request.
 //
@@ -107,6 +109,11 @@ func (n *btcNode) Create() (address string, err error) {
 	return
 }
 
+// WithContext does nothing right now TODO
+func (n *btcNode) WithContext(ctx context.Context) interface{} {
+	return n
+}
+
 // bigIntJSONView represent decimal.Big json representation
 type bigIntJSONView decimal.Big
 
@@ -131,6 +138,18 @@ func (n *btcNode) Balance(address string) (balance *decimal.Big, err error) {
 		if rpcErr.Code == rpcErrInvalidAddressCode {
 			err = nodes.ErrAddressInvalid
 		}
+	}
+	casted := decimal.Big(inputBalance)
+	balance = &casted
+	return
+}
+
+// GetBalance returns node account balance
+func (n *btcNode) GetBalance() (balance *decimal.Big, err error) {
+	var inputBalance bigIntJSONView
+	err = n.doCall("getbalance", &inputBalance)
+	if err != nil {
+		return
 	}
 	casted := decimal.Big(inputBalance)
 	balance = &casted

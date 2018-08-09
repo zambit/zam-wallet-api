@@ -1,9 +1,12 @@
 package wallets
 
 import (
+	"errors"
 	"fmt"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
+	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"git.zam.io/wallet-backend/web-api/db"
 	"github.com/ericlagergren/decimal"
@@ -13,13 +16,14 @@ import (
 
 // Api provides methods to create wallets both in blockchain and db and query them
 type Api struct {
-	database    *db.Db
-	coordinator nodes.ICoordinator
+	database      *db.Db
+	coordinator   nodes.ICoordinator
+	processingApi processing.IApi
 }
 
 // NewApi create new api instance
-func NewApi(d *db.Db, coordinator nodes.ICoordinator) *Api {
-	return &Api{d, coordinator}
+func NewApi(d *db.Db, coordinator nodes.ICoordinator, processingApi processing.IApi) *Api {
+	return &Api{d, coordinator, processingApi}
 }
 
 // CreateWallet creates wallet both in db and blockchain node and assigns actual address
@@ -153,9 +157,69 @@ func (api *Api) ValidateCoin(coinName string) (err error) {
 	return
 }
 
+// SendToPhone sends amount of currency from specified wallet to user by phone
+func (api *Api) SendToPhone(userPhone string, walletID int64, toUserPhone string, amount *decimal.Big) (
+	newTx *processing.Tx, err error,
+) {
+	var (
+		fromWallet queries.Wallet
+		toWallet   queries.Wallet
+	)
+	err = api.database.Tx(func(tx db.ITx) (err error) {
+		// query source wallet
+		fromWallet, err = queries.GetWallet(tx, userPhone, walletID)
+		if err != nil {
+			return
+		}
+
+		// lookup destination user wallet
+		wts, _, _, err := queries.GetWallets(tx, toUserPhone, queries.GetWalletFilters{ByCoin: fromWallet.Coin.ShortName})
+		if err != nil {
+			return err
+		}
+		// there is no special error which indicates that no wallets found due to unexisted user, so check by slice len
+		if len(wts) == 0 {
+			// TODO implementme: currently user wallet awaiting not supported, return error
+			err = errors.New("wallets: not implemented: user wallet awaiting not implemented")
+			return
+		}
+		if len(wts) > 1 {
+			// also we doesn't support multiple wallets of same coin which belongs to one user
+			err = errors.New("wallets: not implemented: user same coin multi wallet not supported")
+			return
+		}
+		toWallet = wts[0]
+
+		// query sender balance
+		balance, err := api.queryBalance(&fromWallet)
+		// i don't want to exmplain this check
+		if balance.Cmp(amount) < 0 {
+			err = errs.ErrNotInsufficientFunds
+		}
+
+		return
+	})
+	if err != nil {
+		return
+	}
+
+	newTx, err = api.processingApi.SendInternal(fromWallet, toWallet, amount)
+	return
+}
+
 //
 func (api *Api) queryBalance(wallet *queries.Wallet) (balance *decimal.Big, err error) {
-	observer, _ := api.coordinator.Observer(wallet.Coin.ShortName)
-	balance, err = observer.Balance(wallet.Address)
+	balance, err = api.coordinator.Observer(wallet.Coin.ShortName).Balance(wallet.Address)
+	if err != nil {
+		return
+	}
+	txsSum, err := api.processingApi.GetTxsesSum(*wallet)
+	if err != nil {
+		balance = new(decimal.Big)
+		return
+	}
+	if txsSum != nil {
+		balance = balance.Add(balance, txsSum)
+	}
 	return
 }

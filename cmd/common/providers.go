@@ -44,8 +44,14 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 	// provide root logger
 	utils.MustProvide(c, providers.RootLogger)
 
+	// provide tracer
+	utils.MustProvide(c, internalproviders.Tracer)
+
 	// provide ordinal db connection
 	utils.MustProvide(c, providers.DB)
+
+	// provide gorm db wrapper
+	utils.MustProvide(c, internalproviders.Gorm)
 
 	// provide nosql storage
 	utils.MustProvide(c, providers.Storage)
@@ -61,4 +67,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 
 	// provide wallets api
 	utils.MustProvide(c, internalproviders.WalletsApi)
+
+	// provide processing api
+	utils.MustProvide(c, internalproviders.ProcessingApi)
 }

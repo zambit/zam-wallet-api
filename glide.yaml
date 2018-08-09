@@ -22,6 +22,7 @@ import:
   subpackages:
   - database/postgres
   - source/file
+- package: github.com/jinzhu/gorm
 - package: github.com/lib/pq
 - package: github.com/jmoiron/sqlx
 - package: github.com/ericlagergren/decimal

@@ -13,4 +13,7 @@ var (
 
 	// ErrWalletCreationRejected returned when wallet connot be created due to specific values limitations
 	ErrWalletCreationRejected = errors.New("wallet creation rejected due to params")
+
+	// ErrNotInsufficientFunds anyone knows what this error means.
+	ErrNotInsufficientFunds = errors.New("processing: insufficient funds")
 )
