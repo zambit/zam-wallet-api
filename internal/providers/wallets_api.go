@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
@@ -8,6 +9,11 @@ import (
 )
 
 // WalletsApi
-func WalletsApi(d *db.Db, coordinator nodes.ICoordinator, api processing.IApi) *wallets.Api {
-	return wallets.NewApi(d, coordinator, api)
+func WalletsApi(
+	d *db.Db,
+	coordinator nodes.ICoordinator,
+	api processing.IApi,
+	balanceHelper helpers.IBalance,
+) *wallets.Api {
+	return wallets.NewApi(d, coordinator, api, balanceHelper)
 }

@@ -1,12 +1,13 @@
 package wallets
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
-	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"git.zam.io/wallet-backend/web-api/db"
 	"github.com/ericlagergren/decimal"
@@ -19,11 +20,12 @@ type Api struct {
 	database      *db.Db
 	coordinator   nodes.ICoordinator
 	processingApi processing.IApi
+	balanceHelper helpers.IBalance
 }
 
 // NewApi create new api instance
-func NewApi(d *db.Db, coordinator nodes.ICoordinator, processingApi processing.IApi) *Api {
-	return &Api{d, coordinator, processingApi}
+func NewApi(d *db.Db, coordinator nodes.ICoordinator, processingApi processing.IApi, balanceHelper helpers.IBalance) *Api {
+	return &Api{d, coordinator, processingApi, balanceHelper}
 }
 
 // CreateWallet creates wallet both in db and blockchain node and assigns actual address
@@ -157,7 +159,9 @@ func (api *Api) ValidateCoin(coinName string) (err error) {
 	return
 }
 
-// SendToPhone sends amount of currency from specified wallet to user by phone
+// SendToPhone sends internal transaction determining recipient wallet by source wallet and dest phone number. If
+// user not exists, transaction will be marked as "pending" and may be continued by `NotifyUserCreatesWallet` call.
+// May return ErrNoSuchWallet.
 func (api *Api) SendToPhone(userPhone string, walletID int64, toUserPhone string, amount *decimal.Big) (
 	newTx *processing.Tx, err error,
 ) {
@@ -190,36 +194,17 @@ func (api *Api) SendToPhone(userPhone string, walletID int64, toUserPhone string
 		}
 		toWallet = wts[0]
 
-		// query sender balance
-		balance, err := api.queryBalance(&fromWallet)
-		// i don't want to exmplain this check
-		if balance.Cmp(amount) < 0 {
-			err = errs.ErrNotInsufficientFunds
-		}
-
 		return
 	})
 	if err != nil {
 		return
 	}
 
-	newTx, err = api.processingApi.SendInternal(fromWallet, toWallet, amount)
+	newTx, err = api.processingApi.SendInternal(&fromWallet, &toWallet, amount)
 	return
 }
 
 //
 func (api *Api) queryBalance(wallet *queries.Wallet) (balance *decimal.Big, err error) {
-	balance, err = api.coordinator.Observer(wallet.Coin.ShortName).Balance(wallet.Address)
-	if err != nil {
-		return
-	}
-	txsSum, err := api.processingApi.GetTxsesSum(*wallet)
-	if err != nil {
-		balance = new(decimal.Big)
-		return
-	}
-	if txsSum != nil {
-		balance = balance.Add(balance, txsSum)
-	}
-	return
+	return api.balanceHelper.TotalWalletBalanceCtx(context.Background(), wallet)
 }

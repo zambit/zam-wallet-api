@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers/balance"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"github.com/jinzhu/gorm"
@@ -8,6 +10,9 @@ import (
 )
 
 // ProcessingApi
-func ProcessingApi(db *gorm.DB, coordinator nodes.ICoordinator, _ opentracing.Tracer) processing.IApi {
-	return processing.New(db, coordinator)
+func ProcessingApi(db *gorm.DB, coordinator nodes.ICoordinator, _ opentracing.Tracer) (processing.IApi, helpers.IBalance) {
+	b := balance.New(coordinator, nil)
+	api := processing.New(db, coordinator, b)
+	b.ProcessingApi = api
+	return api, b
 }

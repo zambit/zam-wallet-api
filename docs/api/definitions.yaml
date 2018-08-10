@@ -122,11 +122,11 @@ SendTransactionRequest:
       description: Wallet for featured transaction
     recipient:
       type: string
-      description: |
-        'Recipinet of this transaction, on of "me", "coin_address", "user_id"'
+      format: phone
+      description: Recipient phone (only phone supported for now)
     amount:
       type: number
-      description: Amount of transferred coins
+      description: Amount of transferred coins, must be greater then zero.
 
 SendTransactionResponse:
   allOf:

@@ -23,6 +23,6 @@ type Wallet struct {
 
 	CreatedAt time.Time `db:"created_at"`
 
-	Coin   Coin  `db:",prefix=coins_"`
+	Coin   Coin  `db:",prefix=coins_" gorm:"foreignkey:CoinID;association_autoupdate:false;association_autocreate:false"`
 	CoinID int64 `db:"coin_id"`
 }

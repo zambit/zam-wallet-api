@@ -3,6 +3,8 @@ package processing
 import (
 	"context"
 	"errors"
+	"git.zam.io/wallet-backend/wallet-api/db"
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"github.com/ericlagergren/decimal"
@@ -17,6 +19,15 @@ var (
 
 	// ErrTxAmountToBig returned when tx exceed amount threshold
 	ErrTxAmountToBig = errors.New("processing: tx is exceed amount threshold")
+
+	// ErrInsufficientFunds anyone knows what this error means.
+	ErrInsufficientFunds = errors.New("processing: insufficient funds")
+
+	// ErrZeroAmount when amount is zero
+	ErrZeroAmount = errors.New("processing: zero amount")
+
+	// ErrNegativeAmount when negative amount passed
+	ErrNegativeAmount = errors.New("processing: negative amount")
 )
 
 // IApi represents wallet transaction operations and implements simplified processing center, which able to
@@ -25,34 +36,34 @@ type IApi interface {
 	// WithCtx attach context to the next method calls. Returned value must not outlive given context.
 	WithCtx(ctx context.Context) IApi
 
-	// SendByPhone sends internal transaction determining recipient wallet by source wallet and dest phone number. If
-	// user not exists, transaction will be marked as "pending" and may be continued by `NotifyUserCreatesWallet` call.
-	// May return ErrNoSuchWallet.
-	SendInternal(wallet queries.Wallet, toWallet queries.Wallet, amount *decimal.Big) (newTx *Tx, err error)
+	// SendInternal
+	SendInternal(wallet *queries.Wallet, toWallet *queries.Wallet, amount *decimal.Big) (newTx *Tx, err error)
 
 	// GetTxsesSum get sum of outgoing and incoming transactions for specified wallet
-	GetTxsesSum(wallet queries.Wallet) (sum *decimal.Big, err error)
+	GetTxsesSum(wallet *queries.Wallet) (sum *decimal.Big, err error)
 
 	// NotifyUserCreatesWallet lookups pending transactions which waits wallet of this user and perform transactions.
 	// Returns ErrNoOneTxAwaitsWallet if no one affected.
 	// May return ErrNoSuchWallet.
-	NotifyUserCreatesWallet(wallet queries.Wallet) error
+	NotifyUserCreatesWallet(wallet *queries.Wallet) error
 }
 
 // Api is IApi implementation
 type Api struct {
 	ctx context.Context
 
-	d           *gorm.DB
-	coordinator nodes.ICoordinator
+	database      *gorm.DB
+	coordinator   nodes.ICoordinator
+	balanceHelper helpers.IBalance
 }
 
 // New
-func New(db *gorm.DB, coordinator nodes.ICoordinator) IApi {
+func New(db *gorm.DB, coordinator nodes.ICoordinator, balanceHelper helpers.IBalance) IApi {
 	return &Api{
-		d:           db,
-		coordinator: coordinator,
-		ctx:         context.Background(),
+		database:      db,
+		coordinator:   coordinator,
+		ctx:           context.Background(),
+		balanceHelper: balanceHelper,
 	}
 }
 
@@ -64,8 +75,8 @@ func (api *Api) WithCtx(ctx context.Context) IApi {
 }
 
 // SendByPhone is IApi implementation
-func (api *Api) SendInternal(wallet queries.Wallet, toWallet queries.Wallet, amount *decimal.Big) (newTx *Tx, err error) {
-	span, ctx := StartSpanFromContext(api.ctx, "send_by_phone")
+func (api *Api) SendInternal(wallet *queries.Wallet, toWallet *queries.Wallet, amount *decimal.Big) (newTx *Tx, err error) {
+	span, ctx := StartSpanFromContext(api.ctx, "send_internal")
 	defer span.Finish()
 
 	span.LogKV(
@@ -75,47 +86,52 @@ func (api *Api) SendInternal(wallet queries.Wallet, toWallet queries.Wallet, amo
 		"amount", amount,
 	)
 
-	err = TransactionCtx(ctx, api.d, func(ctx context.Context, tx *gorm.DB) (err error) {
-		span := SpanFromContext(ctx)
-		defer span.Finish()
+	// check amount, it should be greater the zero
+	switch amount.Sign() {
+	case 0:
+		err = ErrZeroAmount
+		return
+	case -1:
+		err = ErrNegativeAmount
+		return
+	}
 
-		// query wallet balance, tx amount should not
-		generalBalance, err := api.coordinator.AccountObserverWithCtx(ctx, wallet.Coin.ShortName).GetBalance()
-		if err != nil {
-			return
-		}
-
-		// tx amount should not exceed node balance, return amount to big err in other case
-		span.LogKV("account balance", generalBalance)
-		if generalBalance.Cmp(amount) < 0 {
-			return ErrTxAmountToBig
-		}
-
-		// query status explicitly, no other way here :(
-		var status TxStatus
-		err = tx.Where(TxStatus{Name: "success"}).First(&status).Error
+	// create new tx in transaction for future select for update
+	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, tx *gorm.DB) error {
+		// query status explicitly, no clear way with gorm :(
+		var stateModel TxStatus
+		err = tx.Model(&stateModel).Where("name = ?", TxStateJustCreated).First(&stateModel).Error
 		if err != nil {
 			return err
 		}
 
 		// create new wallet right in done state
 		pTx := &Tx{
-			FromWallet: &wallet,
-			ToWallet:   &toWallet,
+			FromWallet: wallet,
+			ToWallet:   toWallet,
 			Type:       TxInternal,
 			Amount:     &postgres.Decimal{V: amount},
-			Status:     &status,
+			Status:     &stateModel,
 		}
 		err = tx.Create(pTx).Error
 		if err != nil {
-			return
+			return err
 		}
 
 		newTx = pTx
 		span.LogKV("new_tx_id", newTx.ID)
-
-		return
+		return nil
 	})
+	if err != nil {
+		return
+	}
+
+	// preform steps
+	newTx, err = StepTx(ctx, api.database, newTx, &StepResources{
+		Coordinator:   api.coordinator,
+		BalanceHelper: api.balanceHelper,
+	})
+
 	if err != nil {
 		span.LogKV("err", err)
 	}
@@ -138,25 +154,25 @@ select income.val - outcome.val as sum, income.val as income, outcome.val as out
 from income, outcome;`
 
 // GetTxsesSum implements IApi interface
-func (api *Api) GetTxsesSum(wallet queries.Wallet) (sum *decimal.Big, err error) {
+func (api *Api) GetTxsesSum(wallet *queries.Wallet) (sum *decimal.Big, err error) {
 	span, ctx := StartSpanFromContext(api.ctx, "txses_sum")
 	defer span.Finish()
 
 	span.LogKV("wallet_id", wallet.ID, "coin", wallet.Coin.ShortName)
 
-	err = TransactionCtx(ctx, api.d, func(ctx context.Context, tx *gorm.DB) error {
-		type scanResT struct {
-			Sum     *postgres.Decimal
-			Income  *postgres.Decimal
-			Outcome *postgres.Decimal
-		}
+	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, tx *gorm.DB) error {
+		span := SpanFromContext(ctx)
 
-		var scanRes scanResT
+		var (
+			totalSum *postgres.Decimal
+			income   *postgres.Decimal
+			outcome  *postgres.Decimal
+		)
 		rows, err := tx.Raw(aggregateTxsesQuery, wallet.ID).Rows()
+		// why not uses row? with gorm it sometimes doesn't work as expected, and i don't know why.
 		defer rows.Close()
-
 		for rows.Next() {
-			err = rows.Scan(&scanRes.Sum, &scanRes.Income, &scanRes.Outcome)
+			err = rows.Scan(&totalSum, &income, &outcome)
 			if err != nil {
 				return err
 			}
@@ -166,50 +182,24 @@ func (api *Api) GetTxsesSum(wallet queries.Wallet) (sum *decimal.Big, err error)
 			return err
 		}
 
-		if scanRes.Income != nil && scanRes.Outcome != nil && scanRes.Sum != nil {
-			span := SpanFromContext(ctx)
-			defer span.Finish()
-			sum = scanRes.Sum.V
-			span.LogKV("income", scanRes.Income.V, "outcome", scanRes.Outcome.V, "sum", scanRes.Sum.V)
+		// this values mandatory should be logged
+		if totalSum != nil {
+			sum = totalSum.V
+			span.LogKV("income", income.V)
+		} else {
+			span.LogKV("msg", "no txs for this wallet")
 		}
-
 		return nil
 	})
+
 	if err != nil {
 		span.LogKV("err", err)
 	}
+	span.LogKV("sum", sum)
 	return
 }
 
 // NotifyUserCreatesWallet implements IApi interface
-func (*Api) NotifyUserCreatesWallet(wallet queries.Wallet) error {
+func (*Api) NotifyUserCreatesWallet(wallet *queries.Wallet) error {
 	panic("implement me")
-}
-
-//func TransactionCtx
-func TransactionCtx(ctx context.Context, db *gorm.DB, cb func(ctx context.Context, tx *gorm.DB) error) error {
-	node, cCtx := StartSpanFromContext(ctx, "transaction")
-	defer node.Finish()
-
-	tx := db.Begin()
-	if tx.Error != nil {
-		node.LogKV("open_tx_err", tx.Error)
-		return tx.Error
-	}
-	defer func() {
-		p := recover()
-		if p != nil {
-			node.LogKV("panic", p)
-			tx.Rollback()
-			panic(p)
-		}
-	}()
-
-	err := cb(cCtx, tx)
-	if err != nil {
-		node.LogKV("cb_err", err)
-		return err
-	}
-
-	return tx.Commit().Error
 }

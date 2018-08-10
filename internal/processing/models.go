@@ -6,8 +6,6 @@ import (
 	"gopkg.in/src-d/go-kallax.v1"
 )
 
-//go:generate kallax gen -e models.go
-
 // TxStatus
 type TxStatus struct {
 	kallax.Model `table:"tx_statuses"`
@@ -22,27 +20,35 @@ type TxID uint64
 // TxType
 type TxType string
 
+// Tx types
 const (
 	TxInternal = "internal"
 	TxExternal = "external"
+)
+
+// Tx states
+const (
+	TxStateJustCreated = "waiting"
+	TxStateDeclined    = "decline"
+	TxStateProcessed   = "success"
 )
 
 // Tx represents database transaction row
 type Tx struct {
 	ID           int64
 	FromWalletID int64
-	FromWallet   *queries.Wallet
+	FromWallet   *queries.Wallet `gorm:"foreignkey:FromWalletID;association_autoupdate:false;association_autocreate:false"`
 
 	Type TxType
 
 	ToWalletID int64
-	ToWallet   *queries.Wallet
+	ToWallet   *queries.Wallet `gorm:"foreignkey:ToWalletID;association_autoupdate:false;association_autocreate:false"`
 	ToAddress  string
 
 	Amount *postgres.Decimal
 
 	StatusID int64
-	Status   *TxStatus `gorm:"foreignkey:StatusID"`
+	Status   *TxStatus `gorm:"foreignkey:StatusID;association_autoupdate:false;association_autocreate:false"`
 }
 
 func (Tx) TableName() string {

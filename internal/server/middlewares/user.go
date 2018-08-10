@@ -9,21 +9,21 @@ import (
 
 var (
 	// ErrOnlyMePermitted
-	ErrOnlyMePermitted = base.NewFieldErr("path", "user_phone", `Only "me" value permitted for you`)
+	ErrOnlyMePermitted = base.NewFieldErr("path", "user_phone", `only "me" value permitted for you`)
 
 	// ErrWrongUserPhone
-	ErrWrongUserPhone = base.NewFieldErr("path", "user_phone", "Wrong value")
+	ErrWrongUserPhone = base.NewFieldErr("path", "user_phone", "wrong value")
 
 	// ErrMissingMeAuthInfo
 	ErrMissingMeAuthInfo = base.ErrorView{
 		Code:    http.StatusInternalServerError,
-		Message: "Cannot obtain user auth info",
+		Message: "cannot obtain user auth info",
 	}
 
 	// ErrWrongAuthInfo
 	ErrWrongAuthInfo = base.ErrorView{
 		Code:    http.StatusInternalServerError,
-		Message: "Wrong auth info: cannot obtain user phone",
+		Message: "wrong auth info: cannot obtain user phone",
 	}
 )
 
