@@ -130,7 +130,7 @@ func (u *bigIntJSONView) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Balance returns wallet balance associated with given address using getreceivedbyaddress method
+// Balances returns wallet balance associated with given address using getreceivedbyaddress method
 func (n *btcNode) Balance(address string) (balance *decimal.Big, err error) {
 	var inputBalance bigIntJSONView
 	err = n.doCall("getreceivedbyaddress", &inputBalance, address)

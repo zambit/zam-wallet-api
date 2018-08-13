@@ -54,6 +54,9 @@ func serverMain(cfg config.RootScheme) (err error) {
 	utils.MustProvide(c, providers.RootRouter, dig.Name("root"))
 	utils.MustProvide(c, internalproviders.ApiRoutes, dig.Name("api_routes"))
 
+	// provide icex converter
+	utils.MustProvide(c, internalproviders.CoinConverter)
+
 	// provide middlewares
 	utils.MustProvide(c, providers.AuthMiddleware, dig.Name("auth_middleware"))
 	utils.MustProvide(c, internalproviders.UserMiddleware, dig.Name("user_middleware"))

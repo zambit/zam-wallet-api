@@ -16,7 +16,7 @@ var (
 type IWalletObserver interface {
 	ctxext.ContextAttacher
 
-	// Balance returns actual address balance
+	// Balances returns actual address balance
 	Balance(address string) (*decimal.Big, error)
 }
 

@@ -9,6 +9,6 @@ import (
 type WalletWithBalance struct {
 	queries.Wallet
 
-	// Balance of the wallet represented using high-precision decimal type
+	// Balances of the wallet represented using high-precision decimal type
 	Balance *decimal.Big
 }

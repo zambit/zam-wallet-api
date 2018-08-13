@@ -9,7 +9,7 @@ type IWalletObserver struct {
 	mock.Mock
 }
 
-// Balance provides a mock function with given fields: address
+// Balances provides a mock function with given fields: address
 func (_m *IWalletObserver) Balance(address string) (*decimal.Big, error) {
 	ret := _m.Called(address)
 

@@ -73,15 +73,6 @@ var _ = Describe("testings /wallets endpoints", func() {
 		c.On("Generator", mock.Anything).Return(g, nil)
 		return g, g
 	})
-	BeforeEachCProvide(func(c *mocks.ICoordinator) (*mocks.IWalletObserver, nodes.IWalletObserver) {
-		o := &mocks.IWalletObserver{}
-		c.On("Observer", mock.Anything).Return(o, nil)
-		return o, o
-	})
-	BeforeEachCProvide(func() (*mocks.ICoordinator, nodes.ICoordinator) {
-		c := &mocks.ICoordinator{}
-		return c, c
-	})
 
 	Context("when creating wallet", func() {
 		const (
@@ -89,7 +80,7 @@ var _ = Describe("testings /wallets endpoints", func() {
 		)
 
 		BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator) base.HandlerFunc {
-			return CreateFactory(wallets.NewApi(d, coordinator))
+			return CreateFactory(wallets.NewApi(d, coordinator, nil, nil))
 		})
 
 		ItD("should create wallet successfully", func(handler base.HandlerFunc, d *db.Db, generator *mocks.IGenerator) {
@@ -202,8 +193,8 @@ var _ = Describe("testings /wallets endpoints", func() {
 
 		Context("when querying multiple wallets", func() {
 			BeforeEachCProvide(func(d *db.Db, coordinator nodes.ICoordinator, observer *mocks.IWalletObserver) base.HandlerFunc {
-				observer.On("Balance", mock.Anything).Return(nil, nil).Times(10)
-				return GetAllFactory(wallets.NewApi(d, coordinator))
+				observer.On("Balances", mock.Anything).Return(nil, nil).Times(10)
+				return GetAllFactory(wallets.NewApi(d, coordinator, nil, nil), nil)
 			})
 
 			ItD("should return all rows due to no filters", func(handler base.HandlerFunc, btcWIDs btcWIDsT, ethWIDs ethWIDsT) {

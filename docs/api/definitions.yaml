@@ -37,9 +37,18 @@ WalletData:
     address:
       type: string
       description: Real address inside coin blockchain
-    balance:
-      type: number
-      description: Wallet balance
+    balances:
+      type: object
+      description: Wallet balances in different units
+      additionalProperties:
+        type: number
+        properties:
+          code:
+            type: string
+            description: Currency or cypto-coin name
+          text:
+            type: number
+            description: Value of balance in specified currency or crypto-coin units
   required:
     - id
     - coin

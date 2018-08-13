@@ -5,6 +5,7 @@ import (
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/dig"
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 )
 
 // Dependencies
@@ -16,6 +17,8 @@ type Dependencies struct {
 	UserMiddleware gin.HandlerFunc `name:"user_middleware"`
 
 	Api *wallets.Api
+
+	Converter helpers.ICoinConverter
 }
 
 // Register
@@ -32,11 +35,11 @@ func Register(dependencies Dependencies) error {
 	)
 	group.GET(
 		"/wallets/:wallet_id",
-		base.WrapHandler(GetFactory(dependencies.Api)),
+		base.WrapHandler(GetFactory(dependencies.Api, dependencies.Converter)),
 	)
 	group.GET(
 		"/wallets",
-		base.WrapHandler(GetAllFactory(dependencies.Api)),
+		base.WrapHandler(GetAllFactory(dependencies.Api, dependencies.Converter)),
 	)
 	return nil
 }

@@ -2,12 +2,17 @@ package wallets
 
 import (
 	"git.zam.io/wallet-backend/common/pkg/merrors"
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
+	"github.com/ericlagergren/decimal"
 	"github.com/gin-gonic/gin"
+	ot "github.com/opentracing/opentracing-go"
 	"net/http"
+	"strings"
+	"sync"
 )
 
 var (
@@ -62,7 +67,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 
 		// prepare response body
 		code = 201
-		resp = ResponseFromWallet(wallet)
+		resp = ResponseFromWallet(wallet, AdditionalBalance{})
 
 		return
 	}
@@ -70,24 +75,35 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 
 // GetFactory creates handler which used to query wallet which is specified by path param 'wallet_id', returns
 // 'Response' on success.
-func GetFactory(api *wallets.Api) base.HandlerFunc {
+func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
+		span, _ := ot.StartSpanFromContext(c, "get_wallet")
+		defer span.Finish()
+
 		// parse wallet id path param
 		walletID, walletIDValid := parseWalletIDView(c.Param("wallet_id"))
 		if !walletIDValid {
 			err = errWalletIDInvalid
 			return
 		}
+		span.LogKV("wallet_id", walletID)
 
 		// extract user id
 		userID, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
+		span.LogKV("user_id", userID)
+
+		// extract query params and ignore errors
+		params := DefaultGetRequest()
+		c.BindQuery(&params)
 
 		// perform request
 		wallet, err := api.GetWallet(userID, walletID)
 		if err != nil {
+			span.LogKV("msg", "error getting wallet")
+			span.LogKV("err", err)
 			if err == errs.ErrNoSuchWallet {
 				// invalid wallet id also set 404 error code
 				err = errWalletIDNotFound
@@ -95,36 +111,130 @@ func GetFactory(api *wallets.Api) base.HandlerFunc {
 			return
 		}
 
+		// perform convertation if this argument presented
+		var additionalBalance AdditionalBalance
+		if params.Convert != "" {
+			var err error
+
+			span := span.Tracer().StartSpan("converting_balance", ot.ChildOf(span.Context()))
+			span.LogKV("convert_to", params.Convert)
+			span.LogKV("msg", "converting wallet balance to additional currencies")
+
+			var convertedBalance *decimal.Big
+			convertedBalance, err = converter.ConvertToFiat(wallet.Coin.ShortName, wallet.Balance, params.Convert)
+			if err != nil {
+				span.LogKV("err", err)
+			} else {
+				additionalBalance = AdditionalBalance{
+					Currency: strings.ToLower(params.Convert),
+					Amount:   convertedBalance,
+				}
+			}
+			span.Finish()
+		}
+
 		// prepare response body
-		resp = ResponseFromWallet(wallet)
+		resp = ResponseFromWallet(wallet, additionalBalance)
 		return
 	}
 }
 
 // GetAllFactory
-func GetAllFactory(api *wallets.Api) base.HandlerFunc {
+func GetAllFactory(api *wallets.Api, converter helpers.ICoinConverter) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
+		span, _ := ot.StartSpanFromContext(c, "get_wallet")
+		defer span.Finish()
+
 		params := DefaultGetAllRequest()
 		// ignore error due to invalid query params just ignored
 		c.BindQuery(&params)
+		span.LogKV("params", params)
 
 		// parse cursor
 		fromID, _ := parseWalletIDView(params.Cursor)
+		span.LogKV("from_id", fromID)
 
 		// extract user id
 		userID, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
+		span.LogKV("user_id", userID)
 
 		// query wallets
 		wts, totalCount, hasNext, err := api.GetWallets(userID, params.ByCoin, fromID, params.Count)
 		if err != nil {
+			span.LogKV("msg", "error getting wallets")
+			span.LogKV("err", err)
 			return
 		}
 
+		// perform convertation if this argument presented for all wallets
+		var additionalBalances map[int64]AdditionalBalance
+		if params.Convert != "" && len(wts) > 0 {
+			var err error
+
+			additionalBalances = make(map[int64]AdditionalBalance, len(wts))
+
+			span := span.Tracer().StartSpan("converting_balances_for_wallets", ot.ChildOf(span.Context()))
+			span.LogKV("convert_to", params.Convert)
+			span.LogKV("msg", "converting wallets balance to given currency")
+
+			convert := func(w wallets.WalletWithBalance) AdditionalBalance {
+				var convertedBalance *decimal.Big
+				convertedBalance, err = converter.ConvertToFiat(w.Coin.ShortName, w.Balance, params.Convert)
+				if err != nil {
+					span.LogKV("err", err)
+					return AdditionalBalance{}
+				} else {
+					return AdditionalBalance{
+						Currency: strings.ToLower(params.Convert),
+						Amount:   convertedBalance,
+					}
+				}
+			}
+
+			// since number of wallets highly limited, around 4-8 at all, it's more optimal to use goroutine for each
+			// wallet request, not workers pool
+			switch len(wts) {
+			case 1:
+				res := convert(wts[0])
+				additionalBalances[wts[0].ID] = res
+			default:
+				type res struct {
+					wID     int64
+					balance AdditionalBalance
+				}
+
+				var wg sync.WaitGroup
+				wg.Add(len(wts))
+				resChan := make(chan res)
+
+				for _, w := range wts {
+					go func(w wallets.WalletWithBalance) {
+						resChan <- res{
+							wID:     w.ID,
+							balance: convert(w),
+						}
+						wg.Done()
+					}(w)
+				}
+
+				go func() {
+					wg.Wait()
+					close(resChan)
+				}()
+
+				for r := range resChan {
+					additionalBalances[r.wID] = r.balance
+				}
+			}
+
+			span.Finish()
+		}
+
 		// prepare response body
-		resp = AllResponseFromWallets(wts, totalCount, hasNext)
+		resp = AllResponseFromWallets(wts, totalCount, hasNext, additionalBalances)
 		return
 	}
 }
