@@ -6,6 +6,7 @@ import (
 	"git.zam.io/wallet-backend/web-api/config/db"
 	"git.zam.io/wallet-backend/web-api/config/isc"
 	"github.com/spf13/viper"
+	jconfig "github.com/uber/jaeger-client-go/config"
 )
 
 // RootScheme is the scheme used by top-level app
@@ -24,6 +25,9 @@ type RootScheme struct {
 
 	// ISC contains inter-process communication params
 	ISC isc.Scheme
+
+	// JaegerConfig is jaeger tracer configuration
+	JaegerConfig jconfig.Configuration
 }
 
 // Init set default values
@@ -34,4 +38,9 @@ func Init(v *viper.Viper) {
 	v.SetDefault("Server.Host", "localhost")
 	v.SetDefault("Server.Port", 9998)
 	v.SetDefault("Server.Storage.URI", "mem://")
+
+	v.SetDefault("JaegerConfig.ServiceName", "wallet-api")
+	v.SetDefault("JaegerConfig.Reporter.LogSpans", true)
+	v.SetDefault("JaegerConfig.Sampler.Type", "const")
+	v.SetDefault("JaegerConfig.Sampler.Param", 1)
 }

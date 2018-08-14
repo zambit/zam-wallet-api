@@ -10,6 +10,7 @@ import (
 	iscconf "git.zam.io/wallet-backend/web-api/config/isc"
 	webserverconf "git.zam.io/wallet-backend/web-api/config/server"
 	"git.zam.io/wallet-backend/web-api/pkg/providers"
+	jconfig "github.com/uber/jaeger-client-go/config"
 	"go.uber.org/dig"
 )
 
@@ -28,6 +29,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 		serverconf.Scheme,
 		walletsconf.Scheme,
 		webserverconf.Scheme,
+		jconfig.Configuration,
 	) {
 		servConf := cfg.Server
 		wservConf := webserverconf.Scheme{
@@ -38,7 +40,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 			Auth:    servConf.Auth,
 		}
 
-		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf
+		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf, cfg.JaegerConfig
 	})
 
 	// provide root logger
