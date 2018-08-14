@@ -45,10 +45,12 @@ WalletData:
         properties:
           code:
             type: string
-            description: Currency or cypto-coin name
+            description: Fiat currency or cypto-coin name
+            example: btc
           text:
             type: number
             description: Value of balance in specified currency or crypto-coin units
+            example: 100.12
   required:
     - id
     - coin

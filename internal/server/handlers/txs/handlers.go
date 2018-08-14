@@ -10,7 +10,8 @@ import (
 	"github.com/ericlagergren/decimal"
 	"github.com/gin-gonic/gin"
 	"net/http"
-)
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	)
 
 var (
 	errUserMiddlewareMissing = base.ErrorView{
@@ -27,11 +28,20 @@ var (
 // SendFactory
 func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
+		span, ctx := trace.GetSpanWithCtx(c)
+		defer span.Finish()
+
 		params := SendRequest{}
 		err = base.ShouldBindJSON(c, &params)
 		if err != nil {
 			return
 		}
+
+		span.LogKV(
+			"wallet_id", params.WalletID,
+			"recipient", params.Recipient,
+			"amount", params.Amount,
+		)
 
 		// extract user phone
 		userPhone, err := getUserPhone(c)
@@ -39,8 +49,10 @@ func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
 			return
 		}
 
+		span.LogKV("")
+
 		// try send money
-		tx, err := walletApi.SendToPhone(userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))
+		tx, err := walletApi.SendToPhone(ctx, userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))
 		if err != nil {
 			if err == errs.ErrNoSuchWallet {
 				err = errNoSuchWallet

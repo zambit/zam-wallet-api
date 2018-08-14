@@ -29,7 +29,7 @@ func NewApi(d *db.Db, coordinator nodes.ICoordinator, processingApi processing.I
 }
 
 // CreateWallet creates wallet both in db and blockchain node and assigns actual address
-func (api *Api) CreateWallet(userPhone string, coinName, walletName string) (wallet WalletWithBalance, err error) {
+func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, walletName string) (wallet WalletWithBalance, err error) {
 	// uppercase coin name because everywhere coin short name used in such format
 	coinName = strings.ToUpper(coinName)
 
@@ -86,7 +86,7 @@ func (api *Api) CreateWallet(userPhone string, coinName, walletName string) (wal
 }
 
 // GetWallet returns wallet of given id
-func (api *Api) GetWallet(userPhone string, walletID int64) (wallet WalletWithBalance, err error) {
+func (api *Api) GetWallet(ctx context.Context, userPhone string, walletID int64) (wallet WalletWithBalance, err error) {
 	err = api.database.Tx(func(tx db.ITx) error {
 		wallet.Wallet, err = queries.GetWallet(tx, userPhone, walletID)
 		return err
@@ -96,13 +96,13 @@ func (api *Api) GetWallet(userPhone string, walletID int64) (wallet WalletWithBa
 	}
 
 	// query actual balance
-	wallet.Balance, err = api.queryBalance(&wallet.Wallet)
+	wallet.Balance, err = api.queryBalance(ctx, &wallet.Wallet)
 
 	return
 }
 
 // GetWallets returns all wallets which belongs to a specific user applying filter and pagination params
-func (api *Api) GetWallets(userPhone string, onlyCoin string, fromID, count int64) (
+func (api *Api) GetWallets(ctx context.Context, userPhone string, onlyCoin string, fromID, count int64) (
 	wts []WalletWithBalance, totalCount int64, hasNext bool, err error,
 ) {
 	var rawWts []queries.Wallet
@@ -131,7 +131,7 @@ func (api *Api) GetWallets(userPhone string, onlyCoin string, fromID, count int6
 
 			var err error
 			wallet := WalletWithBalance{Wallet: rawWallet}
-			wallet.Balance, err = api.queryBalance(&wallet.Wallet)
+			wallet.Balance, err = api.queryBalance(ctx, &wallet.Wallet)
 			if err != nil {
 				errsChan <- err
 				return
@@ -162,7 +162,7 @@ func (api *Api) ValidateCoin(coinName string) (err error) {
 // SendToPhone sends internal transaction determining recipient wallet by source wallet and dest phone number. If
 // user not exists, transaction will be marked as "pending" and may be continued by `NotifyUserCreatesWallet` call.
 // May return ErrNoSuchWallet.
-func (api *Api) SendToPhone(userPhone string, walletID int64, toUserPhone string, amount *decimal.Big) (
+func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int64, toUserPhone string, amount *decimal.Big) (
 	newTx *processing.Tx, err error,
 ) {
 	var (
@@ -200,11 +200,11 @@ func (api *Api) SendToPhone(userPhone string, walletID int64, toUserPhone string
 		return
 	}
 
-	newTx, err = api.processingApi.SendInternal(&fromWallet, &toWallet, amount)
+	newTx, err = api.processingApi.SendInternal(ctx, &fromWallet, processing.InternalTxRecipient{Wallet: &toWallet}, amount)
 	return
 }
 
 //
-func (api *Api) queryBalance(wallet *queries.Wallet) (balance *decimal.Big, err error) {
-	return api.balanceHelper.TotalWalletBalanceCtx(context.Background(), wallet)
+func (api *Api) queryBalance(ctx context.Context, wallet *queries.Wallet) (balance *decimal.Big, err error) {
+	return api.balanceHelper.TotalWalletBalanceCtx(ctx, wallet)
 }

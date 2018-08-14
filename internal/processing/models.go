@@ -44,6 +44,7 @@ type Tx struct {
 	ToWalletID int64
 	ToWallet   *queries.Wallet `gorm:"foreignkey:ToWalletID;association_autoupdate:false;association_autocreate:false"`
 	ToAddress  string
+	ToPhone    string
 
 	Amount *postgres.Decimal
 

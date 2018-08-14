@@ -1,16 +1,18 @@
 package icex
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"git.zam.io/wallet-backend/common/pkg/validations"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"github.com/ericlagergren/decimal"
 	"github.com/go-playground/validator"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"net/http"
-	"strings"
-	"fmt"
 	"net/url"
+	"strings"
 )
 
 // static coin name mapping
@@ -54,8 +56,8 @@ var fiatNamesSet = map[string]struct{}{
 }
 
 const (
-	coinsEndpoint = "/api/coins"
-	coinValueEndpoint= "/api/coins/"
+	coinsEndpoint     = "/api/coins"
+	coinValueEndpoint = "/api/coins/"
 )
 
 // v is validator
@@ -102,7 +104,15 @@ func New(icexHost string) helpers.ICoinConverter {
 }
 
 // ConvertToFiat implements ICoinConverter
-func (converter *CoinConverter) ConvertToFiat(coinName string, amount *decimal.Big, dstCurrencyName string) (fiatAmount *decimal.Big, err error) {
+func (converter *CoinConverter) ConvertToFiat(
+	ctx context.Context,
+	coinName string,
+	amount *decimal.Big,
+	dstCurrencyName string,
+) (fiatAmount *decimal.Big, err error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "icex_convert_to_fiat")
+	defer span.Finish()
+
 	// check crypto-coin name
 	icexCoinName, ok := coinNameToIcexNameMapping[strings.ToLower(coinName)]
 	if !ok {
@@ -116,13 +126,16 @@ func (converter *CoinConverter) ConvertToFiat(coinName string, amount *decimal.B
 	}
 
 	//
-	req, err := http.NewRequest("GET", converter.ICEXHost+"/api/coins/"+icexCoinName+"?convert="+dstCurrencyName, nil)
+	endpointUrl := converter.ICEXHost + "/api/coins/" + icexCoinName + "?convert=" + dstCurrencyName
+	span.LogKV("icex_coin_name", icexCoinName)
+	span.LogKV("icex_endpoint_url", endpointUrl )
+	req, err := http.NewRequest("GET", endpointUrl , nil)
 	if err != nil {
 		err = errors.Wrap(err, "icex_convert: icex host unavailable")
 		return
 	}
 
-	resp, err := converter.Client.Do(req)
+	resp, err := converter.Client.Do(req.WithContext(ctx))
 	if err != nil {
 		err = helpers.ErrCryptoCurrencyName
 		return

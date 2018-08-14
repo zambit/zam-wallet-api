@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/dig"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
 // Dependencies
@@ -25,6 +26,7 @@ type Dependencies struct {
 func Register(dependencies Dependencies) error {
 	group := dependencies.Routes.Group(
 		"/user/:user_phone/",
+		trace.StartSpanMiddleware(),
 		dependencies.AuthMiddleware,
 		dependencies.UserMiddleware,
 	)

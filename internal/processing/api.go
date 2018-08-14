@@ -30,28 +30,37 @@ var (
 	ErrNegativeAmount = errors.New("processing: negative amount")
 )
 
+type InternalTxRecipientType int
+
+const (
+	InternalTxWalletRecipient = iota
+	InternalTxPhoneRecipient
+)
+
+// InternalTxRecipient describes
+type InternalTxRecipient struct {
+	Type   InternalTxRecipientType
+	Phone  string
+	Wallet *queries.Wallet
+}
+
 // IApi represents wallet transaction operations and implements simplified processing center, which able to
 // process internal transactions, track their states and waits until specific user creates wallet.
 type IApi interface {
-	// WithCtx attach context to the next method calls. Returned value must not outlive given context.
-	WithCtx(ctx context.Context) IApi
-
 	// SendInternal
-	SendInternal(wallet *queries.Wallet, toWallet *queries.Wallet, amount *decimal.Big) (newTx *Tx, err error)
+	SendInternal(ctx context.Context, wallet *queries.Wallet, recipient InternalTxRecipient, amount *decimal.Big) (newTx *Tx, err error)
 
 	// GetTxsesSum get sum of outgoing and incoming transactions for specified wallet
-	GetTxsesSum(wallet *queries.Wallet) (sum *decimal.Big, err error)
+	GetTxsesSum(ctx context.Context, wallet *queries.Wallet) (sum *decimal.Big, err error)
 
 	// NotifyUserCreatesWallet lookups pending transactions which waits wallet of this user and perform transactions.
 	// Returns ErrNoOneTxAwaitsWallet if no one affected.
 	// May return ErrNoSuchWallet.
-	NotifyUserCreatesWallet(wallet *queries.Wallet) error
+	NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wallet) error
 }
 
 // Api is IApi implementation
 type Api struct {
-	ctx context.Context
-
 	database      *gorm.DB
 	coordinator   nodes.ICoordinator
 	balanceHelper helpers.IBalance
@@ -62,26 +71,18 @@ func New(db *gorm.DB, coordinator nodes.ICoordinator, balanceHelper helpers.IBal
 	return &Api{
 		database:      db,
 		coordinator:   coordinator,
-		ctx:           context.Background(),
 		balanceHelper: balanceHelper,
 	}
 }
 
-// WithCtx
-func (api *Api) WithCtx(ctx context.Context) IApi {
-	cc := *api
-	cc.ctx = ctx
-	return &cc
-}
-
 // SendByPhone is IApi implementation
-func (api *Api) SendInternal(wallet *queries.Wallet, toWallet *queries.Wallet, amount *decimal.Big) (newTx *Tx, err error) {
-	span, ctx := StartSpanFromContext(api.ctx, "send_internal")
+func (api *Api) SendInternal(ctx context.Context, wallet *queries.Wallet, recipient InternalTxRecipient, amount *decimal.Big) (newTx *Tx, err error) {
+	span, ctx := StartSpanFromContext(ctx, "send_internal")
 	defer span.Finish()
 
 	span.LogKV(
 		"from_wallet_id", wallet.ID,
-		"to_wallet_id", toWallet.ID,
+		"to_wallet_id", recipient.Wallet.ID,
 		"coin", wallet.Coin.ShortName,
 		"amount", amount,
 	)
@@ -108,7 +109,7 @@ func (api *Api) SendInternal(wallet *queries.Wallet, toWallet *queries.Wallet, a
 		// create new wallet right in done state
 		pTx := &Tx{
 			FromWallet: wallet,
-			ToWallet:   toWallet,
+			ToWallet:   recipient.Wallet,
 			Type:       TxInternal,
 			Amount:     &postgres.Decimal{V: amount},
 			Status:     &stateModel,
@@ -120,17 +121,18 @@ func (api *Api) SendInternal(wallet *queries.Wallet, toWallet *queries.Wallet, a
 
 		newTx = pTx
 		span.LogKV("new_tx_id", newTx.ID)
+
+		// preform steps
+		newTx, err = StepTx(ctx, api.database, newTx, &StepResources{
+			Coordinator:   api.coordinator,
+			BalanceHelper: api.balanceHelper,
+		})
+
 		return nil
 	})
 	if err != nil {
 		return
 	}
-
-	// preform steps
-	newTx, err = StepTx(ctx, api.database, newTx, &StepResources{
-		Coordinator:   api.coordinator,
-		BalanceHelper: api.balanceHelper,
-	})
 
 	if err != nil {
 		span.LogKV("err", err)
@@ -154,8 +156,8 @@ select income.val - outcome.val as sum, income.val as income, outcome.val as out
 from income, outcome;`
 
 // GetTxsesSum implements IApi interface
-func (api *Api) GetTxsesSum(wallet *queries.Wallet) (sum *decimal.Big, err error) {
-	span, ctx := StartSpanFromContext(api.ctx, "txses_sum")
+func (api *Api) GetTxsesSum(ctx context.Context, wallet *queries.Wallet) (sum *decimal.Big, err error) {
+	span, ctx := StartSpanFromContext(ctx, "txses_sum")
 	defer span.Finish()
 
 	span.LogKV("wallet_id", wallet.ID, "coin", wallet.Coin.ShortName)
@@ -200,6 +202,6 @@ func (api *Api) GetTxsesSum(wallet *queries.Wallet) (sum *decimal.Big, err error
 }
 
 // NotifyUserCreatesWallet implements IApi interface
-func (*Api) NotifyUserCreatesWallet(wallet *queries.Wallet) error {
+func (*Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wallet) error {
 	panic("implement me")
 }

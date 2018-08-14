@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"github.com/ericlagergren/decimal"
 	"github.com/pkg/errors"
 )
@@ -21,5 +22,10 @@ type ICoinConverter interface {
 	// ConvertToFiat converts amount of coin name (specified by three letter short name) into dst fiat currency
 	// specified also by 3 letter short name. Returns result and error. If coin name is invalid, returns ErrCryptoCurrencyName,
 	// if currency name is invalid, returns ErrFiatCurrencyName. Both currency and coin names are case insensitive.
-	ConvertToFiat(coinName string, amount *decimal.Big, dstCurrencyName string) (fiatAmount *decimal.Big, err error)
+	ConvertToFiat(
+		ctx context.Context,
+		coinName string,
+		amount *decimal.Big,
+		dstCurrencyName string,
+	) (fiatAmount *decimal.Big, err error)
 }

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
 var (
@@ -30,6 +31,9 @@ var (
 // 'Response' on success.
 func CreateFactory(api *wallets.Api) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
+		span, ctx := trace.GetSpanWithCtx(c)
+		defer span.Finish()
+
 		// bind params
 		params := CreateRequest{}
 		err = base.ShouldBindJSON(c, &params)
@@ -46,13 +50,14 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 		}
 
 		// extract user id
-		userID, err := getUserPhone(c)
+		userPhone, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
+		span.LogKV("user_phone", userPhone)
 
 		// create wallet
-		wallet, err := api.CreateWallet(userID, params.Coin, params.WalletName)
+		wallet, err := api.CreateWallet(ctx, userPhone, params.Coin, params.WalletName)
 
 		if err != nil {
 			// coerce error
@@ -77,7 +82,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 // 'Response' on success.
 func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
-		span, _ := ot.StartSpanFromContext(c, "get_wallet")
+		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
 
 		// parse wallet id path param
@@ -89,24 +94,24 @@ func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Handler
 		span.LogKV("wallet_id", walletID)
 
 		// extract user id
-		userID, err := getUserPhone(c)
+		userPhone, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
-		span.LogKV("user_id", userID)
+		span.LogKV("user_phone", userPhone)
 
 		// extract query params and ignore errors
 		params := DefaultGetRequest()
 		c.BindQuery(&params)
 
 		// perform request
-		wallet, err := api.GetWallet(userID, walletID)
+		wallet, err := api.GetWallet(ctx, userPhone, walletID)
 		if err != nil {
-			span.LogKV("msg", "error getting wallet")
-			span.LogKV("err", err)
 			if err == errs.ErrNoSuchWallet {
 				// invalid wallet id also set 404 error code
 				err = errWalletIDNotFound
+			} else {
+				trace.LogErrorWithMsg(span, err, "getting wallet error")
 			}
 			return
 		}
@@ -116,14 +121,14 @@ func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Handler
 		if params.Convert != "" {
 			var err error
 
-			span := span.Tracer().StartSpan("converting_balance", ot.ChildOf(span.Context()))
+			span, ctx := ot.StartSpanFromContext(ctx, "converting_balance")
 			span.LogKV("convert_to", params.Convert)
-			span.LogKV("msg", "converting wallet balance to additional currencies")
+			trace.LogMsg(span, "converting wallet balance to additional currencies")
 
 			var convertedBalance *decimal.Big
-			convertedBalance, err = converter.ConvertToFiat(wallet.Coin.ShortName, wallet.Balance, params.Convert)
+			convertedBalance, err = converter.ConvertToFiat(ctx, wallet.Coin.ShortName, wallet.Balance, params.Convert)
 			if err != nil {
-				span.LogKV("err", err)
+				trace.LogError(span, err)
 			} else {
 				additionalBalance = AdditionalBalance{
 					Currency: strings.ToLower(params.Convert),
@@ -142,7 +147,7 @@ func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Handler
 // GetAllFactory
 func GetAllFactory(api *wallets.Api, converter helpers.ICoinConverter) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
-		span, _ := ot.StartSpanFromContext(c, "get_wallet")
+		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
 
 		params := DefaultGetAllRequest()
@@ -155,17 +160,16 @@ func GetAllFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Hand
 		span.LogKV("from_id", fromID)
 
 		// extract user id
-		userID, err := getUserPhone(c)
+		userPhone, err := getUserPhone(c)
 		if err != nil {
 			return
 		}
-		span.LogKV("user_id", userID)
+		span.LogKV("user_phone", userPhone)
 
 		// query wallets
-		wts, totalCount, hasNext, err := api.GetWallets(userID, params.ByCoin, fromID, params.Count)
+		wts, totalCount, hasNext, err := api.GetWallets(ctx, userPhone, params.ByCoin, fromID, params.Count)
 		if err != nil {
-			span.LogKV("msg", "error getting wallets")
-			span.LogKV("err", err)
+			trace.LogErrorWithMsg(span, err, "error getting wallets")
 			return
 		}
 
@@ -178,13 +182,13 @@ func GetAllFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Hand
 
 			span := span.Tracer().StartSpan("converting_balances_for_wallets", ot.ChildOf(span.Context()))
 			span.LogKV("convert_to", params.Convert)
-			span.LogKV("msg", "converting wallets balance to given currency")
+			trace.LogMsg(span, "converting wallet balance to additional currency")
 
 			convert := func(w wallets.WalletWithBalance) AdditionalBalance {
 				var convertedBalance *decimal.Big
-				convertedBalance, err = converter.ConvertToFiat(w.Coin.ShortName, w.Balance, params.Convert)
+				convertedBalance, err = converter.ConvertToFiat(ctx, w.Coin.ShortName, w.Balance, params.Convert)
 				if err != nil {
-					span.LogKV("err", err)
+					trace.LogError(span, err)
 					return AdditionalBalance{}
 				} else {
 					return AdditionalBalance{

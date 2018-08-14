@@ -8,29 +8,43 @@ import (
 	"git.zam.io/wallet-backend/web-api/db"
 	"git.zam.io/wallet-backend/web-api/pkg/services/broker"
 	"github.com/sirupsen/logrus"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"github.com/pkg/errors"
+	"context"
 )
+
+const componentName = "isc.users.handlers"
 
 // RegistrationCompletedFactory handles user registration event and creates wallets for all available coins
 func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.FieldLogger) base.HandlerFunc {
-	logger = logger.WithField("module", "isc.users.handlers")
-
 	return func(identifier broker.Identifier, dataBinder func(dst interface{}) error) (out base.HandlerOut, err error) {
-		logger.Info("receiving user created event")
+		span := opentracing.GlobalTracer().StartSpan("registration_completed_handler")
+		ctx := opentracing.ContextWithSpan(context.Background(), span)
+		defer span.Finish()
+
+		ext.SpanKind.Set(span, ext.SpanKindConsumerEnum)
+		ext.Component.Set(span, componentName)
 
 		// bind params
 		params := CreatedEvent{}
 		err = dataBinder(&params)
 		if err != nil {
-			logger.WithError(err).Info("message parsing failed")
+			trace.LogErrorWithMsg(span, err, "message parsing failed")
+			return
+		}
+		if params.UserPhone == "" {
+			trace.LogError(span, errors.New("user phone is empty"))
 			return
 		}
 
-		logger = logger.WithField("user_phone", params.UserPhone)
+		span.LogKV("user_phone", params.UserPhone)
 
 		// query available coins and create set
 		coins, err := queries.GetDefaultCoins(d)
 		if err != nil {
-			logger.WithError(err).Error("default coins fetch failed")
+			trace.LogErrorWithMsg(span, err, "default coins fetch failed")
 			return
 		}
 		coinsNamesSet := make(map[string]struct{})
@@ -39,9 +53,9 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		}
 
 		// query already created wallets
-		wts, _, _, err := api.GetWallets(params.UserPhone, "", 0, 0)
+		wts, _, _, err := api.GetWallets(ctx, params.UserPhone, "", 0, 0)
 		if err != nil {
-			logger.WithError(err).Error("user wallets query failed")
+			trace.LogErrorWithMsg(span, err, "user wallets query failed")
 			return
 		}
 
@@ -55,9 +69,10 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		// create wallets for all enabled coins
 		for _, c := range coins {
 			// force default wallet name
-			_, cErr := api.CreateWallet(params.UserPhone, c.ShortName, "")
+			_, cErr := api.CreateWallet(ctx, params.UserPhone, c.ShortName, "")
 			if cErr != nil {
-				logger.WithError(cErr).WithField("coin_name", c.ShortName).Error("wallet creation failed")
+				span.LogKV("coin_name", c.ShortName)
+				trace.LogErrorWithMsg(span, cErr, "wallet creation failed")
 				err = merrors.Append(err, cErr)
 			}
 		}
