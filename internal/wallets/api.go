@@ -15,6 +15,8 @@ import (
 	"sync"
 	"github.com/opentracing/opentracing-go"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"git.zam.io/wallet-backend/common/pkg/types"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 )
 
 // Api provides methods to create wallets both in blockchain and db and query them
@@ -37,11 +39,16 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 
 	// uppercase coin name because everywhere coin short name used in such format
 	coinName = strings.ToUpper(coinName)
-
 	span.LogKV("coin_name", coinName)
 
 	// validate name name
 	_, err = queries.GetCoin(api.database, coinName)
+	if err != nil {
+		return
+	}
+
+	// coerce phone number
+	userPhone, err = coercePhoneNumber(userPhone)
 	if err != nil {
 		return
 	}
@@ -109,6 +116,12 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 
 // GetWallet returns wallet of given id
 func (api *Api) GetWallet(ctx context.Context, userPhone string, walletID int64) (wallet WalletWithBalance, err error) {
+	// coerce phone number
+	userPhone, err = coercePhoneNumber(userPhone)
+	if err != nil {
+		return
+	}
+
 	err = api.database.Tx(func(tx db.ITx) error {
 		wallet.Wallet, err = queries.GetWallet(tx, userPhone, walletID)
 		return err
@@ -127,6 +140,12 @@ func (api *Api) GetWallet(ctx context.Context, userPhone string, walletID int64)
 func (api *Api) GetWallets(ctx context.Context, userPhone string, onlyCoin string, fromID, count int64) (
 	wts []WalletWithBalance, totalCount int64, hasNext bool, err error,
 ) {
+	// coerce phone number
+	userPhone, err = coercePhoneNumber(userPhone)
+	if err != nil {
+		return
+	}
+
 	var rawWts []queries.Wallet
 	err = api.database.Tx(func(tx db.ITx) error {
 		rawWts, totalCount, hasNext, err = queries.GetWallets(tx, userPhone, queries.GetWalletFilters{
@@ -187,6 +206,17 @@ func (api *Api) ValidateCoin(coinName string) (err error) {
 func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int64, toUserPhone string, amount *decimal.Big) (
 	newTx *processing.Tx, err error,
 ) {
+	// coerce user phone number
+	userPhone, err = coercePhoneNumber(userPhone)
+	if err != nil {
+		return
+	}
+	// coerce recipient phone number
+	toUserPhone, err = coercePhoneNumber(toUserPhone)
+	if err != nil {
+		return
+	}
+
 	var (
 		fromWallet     queries.Wallet
 		recipientDescr processing.InternalTxRecipient
@@ -228,4 +258,13 @@ func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int6
 //
 func (api *Api) queryBalance(ctx context.Context, wallet *queries.Wallet) (balance *decimal.Big, err error) {
 	return api.balanceHelper.TotalWalletBalanceCtx(ctx, wallet)
+}
+
+func coercePhoneNumber(userPhone string) (string, error) {
+	userPhoneParsed, err := types.NewPhone(userPhone)
+	if err != nil {
+		err = errs.ErrInvalidPhone
+		return "", err
+	}
+	return string(userPhoneParsed), nil
 }

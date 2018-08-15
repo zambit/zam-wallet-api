@@ -13,4 +13,7 @@ var (
 
 	// ErrWalletCreationRejected returned when wallet connot be created due to specific values limitations
 	ErrWalletCreationRejected = errors.New("wallet creation rejected due to params")
+
+	// ErrInvalidPhone given phone is invalid
+	ErrInvalidPhone = errors.New("wallets: invalid user phone")
 )
