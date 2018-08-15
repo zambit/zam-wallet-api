@@ -30,6 +30,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 		walletsconf.Scheme,
 		webserverconf.Scheme,
 		jconfig.Configuration,
+		webserverconf.NotificatorScheme,
 	) {
 		servConf := cfg.Server
 		wservConf := webserverconf.Scheme{
@@ -40,7 +41,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 			Auth:    servConf.Auth,
 		}
 
-		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf, cfg.JaegerConfig
+		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf, cfg.JaegerConfig, servConf.Notificator
 	})
 
 	// provide root logger
@@ -63,6 +64,12 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 
 	// provide broker
 	utils.MustProvide(c, providers.Broker)
+
+	// provide notifications transport
+	utils.MustProvide(c, providers.NotificationsTransport)
+
+	// provides txs event notificator
+	utils.MustProvide(c, internalproviders.TxsEventNotificator)
 
 	// provide wallet nodes
 	utils.MustProvide(c, internalproviders.Coordinator)

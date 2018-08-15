@@ -23,4 +23,7 @@ type Scheme struct {
 
 	// Storage
 	Storage server.StorageScheme
+
+	// Notificator
+	Notificator server.NotificatorScheme
 }

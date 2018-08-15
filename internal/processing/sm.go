@@ -4,20 +4,22 @@ import (
 	"context"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
-	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
-type SmResources struct {
-	Coordinator   nodes.ICoordinator
-	BalanceHelper helpers.IBalance
+type smResources struct {
+	Coordinator        nodes.ICoordinator
+	BalanceHelper      helpers.IBalance
+	TxEventNotificator isc.ITxsEventNotificator
 }
 
 // StepTx performs as much transaction steps as possible depends on current transaction state
-func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *SmResources) (newTx *Tx, validateErrs error, err error) {
+func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx *Tx, validateErrs error, err error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "step_tx")
 	defer span.Finish()
 
@@ -84,7 +86,12 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *SmResources) (newTx
 }
 
 //
-type stateFunc func(ctx context.Context, tx *Tx, res *SmResources) (newState string, inWait bool, validateErrs, err error)
+type stateFunc func(ctx context.Context, tx *Tx, res *smResources) (
+	newState string,
+	inWait bool,
+	validateErrs error,
+	err error,
+)
 
 //
 func getStateFunc(state string) stateFunc {
@@ -113,15 +120,15 @@ func getStateFuncName(state string) string {
 	}
 }
 
-func recipientWalletCreated(ctx context.Context, tx *Tx, res *SmResources) (newState string, nextStep bool, validateErrs, err error) {
+func recipientWalletCreated(ctx context.Context, tx *Tx, res *smResources) (newState string, nextStep bool, validateErrs, err error) {
 	// send transaction back to validation state due to sender balance can be changed while awaiting recipient wallet creation
 	newState = TxStateValidate
 	nextStep = true
 	return
 }
 
-func validateTxState(ctx context.Context, tx *Tx, res *SmResources) (newState string, nextStep bool, validateErrs, err error) {
-	span, _ := opentracing.StartSpanFromContext(ctx, "validate_tx")
+func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState string, nextStep bool, validateErrs, err error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "validate_tx")
 	defer span.Finish()
 
 	// validate tx properties
@@ -172,6 +179,19 @@ func validateTxState(ctx context.Context, tx *Tx, res *SmResources) (newState st
 		case tx.ToWalletID != nil:
 			newState = TxStateProcessed
 		case tx.ToPhone != nil:
+			trace.InsideSpan(ctx, "sending_await_recipient_notification", func(ctx context.Context, span opentracing.Span) {
+				notifErr := res.TxEventNotificator.AwaitRecipient(isc.TxEventPayload{
+					Coin:           tx.FromWallet.Coin.ShortName,
+					FromWalletName: tx.FromWallet.Name,
+					FromPhone:      tx.FromWallet.UserPhone,
+					Amount:         tx.Amount.V,
+					ToPhone:        *tx.ToPhone,
+				})
+				if notifErr != nil {
+					trace.LogError(span, notifErr)
+					err = notifErr
+				}
+			})
 			newState = TxStateAwaitRecipient
 		}
 	}
