@@ -121,8 +121,8 @@ func getStateFuncName(state string) string {
 }
 
 func recipientWalletCreated(ctx context.Context, tx *Tx, res *smResources) (newState string, nextStep bool, validateErrs, err error) {
-	// send transaction back to validation state due to sender balance can be changed while awaiting recipient wallet creation
-	newState = TxStateValidate
+	// we don't need to verify sender balance again because tx in TxStateAwaitRecipient reserves it's amount
+	newState = TxStateProcessed
 	nextStep = true
 	return
 }
