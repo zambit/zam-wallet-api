@@ -13,6 +13,8 @@ import (
 	"github.com/ericlagergren/decimal"
 	"strings"
 	"sync"
+	"github.com/opentracing/opentracing-go"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
 // Api provides methods to create wallets both in blockchain and db and query them
@@ -30,8 +32,13 @@ func NewApi(d *db.Db, coordinator nodes.ICoordinator, processingApi processing.I
 
 // CreateWallet creates wallet both in db and blockchain node and assigns actual address
 func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, walletName string) (wallet WalletWithBalance, err error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "creating_wallet")
+	defer span.Finish()
+
 	// uppercase coin name because everywhere coin short name used in such format
 	coinName = strings.ToUpper(coinName)
+
+	span.LogKV("coin_name", coinName)
 
 	// validate name name
 	_, err = queries.GetCoin(api.database, coinName)
@@ -72,16 +79,31 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 		}
 
 		// after wallet was successfully created we may generate new wallet address
-		wallet.Address, err = generator.Create()
+		trace.InsideSpan(ctx, "wallet_generation", func(ctx context.Context, span opentracing.Span) {
+			wallet.Address, err = generator.Create()
+			if err != nil {
+				trace.LogErrorWithMsg(span, err, "error occurs while generating wallet address")
+			}
+		})
 		if err != nil {
 			return
 		}
+
+		span.LogKV("generated_address", wallet.Address)
 
 		// then update wallet to new address
 		err = queries.UpdateWallet(tx, wallet.ID, &queries.WalletDiff{Address: &wallet.Address})
 
 		return
 	})
+
+	if err != nil {
+		return
+	}
+
+	// notify processing that wallet created
+	trace.LogMsg(span, "notifying processing center that wallet created")
+	err = api.processingApi.NotifyUserCreatesWallet(ctx, &wallet.Wallet)
 	return
 }
 
@@ -166,8 +188,8 @@ func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int6
 	newTx *processing.Tx, err error,
 ) {
 	var (
-		fromWallet queries.Wallet
-		toWallet   queries.Wallet
+		fromWallet     queries.Wallet
+		recipientDescr processing.InternalTxRecipient
 	)
 	err = api.database.Tx(func(tx db.ITx) (err error) {
 		// query source wallet
@@ -181,18 +203,17 @@ func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int6
 		if err != nil {
 			return err
 		}
-		// there is no special error which indicates that no wallets found due to unexisted user, so check by slice len
-		if len(wts) == 0 {
-			// TODO implementme: currently user wallet awaiting not supported, return error
-			err = errors.New("wallets: not implemented: user wallet awaiting not implemented")
-			return
-		}
-		if len(wts) > 1 {
-			// also we doesn't support multiple wallets of same coin which belongs to one user
+
+		switch len(wts) {
+		case 0:
+			recipientDescr = processing.NewPhoneRecipient(toUserPhone)
+		case 1:
+			recipientDescr = processing.NewWalletRecipient(&wts[0])
+		default:
+			// we doesn't support multiple wallets of same coin which belongs to one user
 			err = errors.New("wallets: not implemented: user same coin multi wallet not supported")
 			return
 		}
-		toWallet = wts[0]
 
 		return
 	})
@@ -200,7 +221,7 @@ func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int6
 		return
 	}
 
-	newTx, err = api.processingApi.SendInternal(ctx, &fromWallet, processing.InternalTxRecipient{Wallet: &toWallet}, amount)
+	newTx, err = api.processingApi.SendInternal(ctx, &fromWallet, recipientDescr, amount)
 	return
 }
 

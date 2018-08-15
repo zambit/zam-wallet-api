@@ -35,12 +35,19 @@ func ToIdView(id int64) string {
 
 // ToView
 func ToView(tx *processing.Tx, userPhone string) *View {
+	var recipient string
+	if tx.ToPhone != nil {
+		recipient = *tx.ToPhone
+	} else {
+		recipient = tx.ToWallet.UserPhone
+	}
+
 	return &View{
 		ID:        ToIdView(tx.ID),
 		Direction: map[bool]string{true: "outgoing", false: "incoming"}[tx.FromWallet.UserPhone == userPhone],
 		Status:    tx.Status.Name,
 		Coin:      strings.ToLower(tx.FromWallet.Coin.ShortName),
-		Recipient: tx.ToWallet.UserPhone,
+		Recipient: recipient,
 		Amount:    (*DecimalView)(tx.Amount.V),
 	}
 }

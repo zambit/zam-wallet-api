@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/jinzhu/gorm"
 	ot "github.com/opentracing/opentracing-go"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
 // TransactionCtx wraps gorm transaction with instrumentation using opentracing
@@ -13,7 +14,7 @@ func TransactionCtx(ctx context.Context, db *gorm.DB, cb func(ctx context.Contex
 
 	tx := db.Begin()
 	if tx.Error != nil {
-		span.LogKV("open_tx_err", tx.Error)
+		trace.LogErrorWithMsg(span, tx.Error, "error occurs while opening transaction")
 		return tx.Error
 	}
 	defer func() {
@@ -27,17 +28,17 @@ func TransactionCtx(ctx context.Context, db *gorm.DB, cb func(ctx context.Contex
 
 	err := cb(cCtx, tx)
 	if err != nil {
-		span.LogKV("cb_err", err)
+		trace.LogErrorWithMsg(span, err, "error returned from callback")
 		tx.Rollback()
 		return err
 	}
 
 	err = tx.Commit().Error
 	if err != nil {
-		span.LogKV("commit_err", err)
+		trace.LogErrorWithMsg(span, err, "error occurs while committing transaction")
 		return err
 	}
 
-	span.LogKV("msg", "commit_successful")
+	trace.LogMsg(span, "transaction committed successfully")
 	return nil
 }

@@ -28,9 +28,10 @@ const (
 
 // Tx states
 const (
-	TxStateJustCreated = "waiting"
-	TxStateDeclined    = "decline"
-	TxStateProcessed   = "success"
+	TxStateValidate       = "waiting"
+	TxStateDeclined       = "decline"
+	TxStateAwaitRecipient = "pending"
+	TxStateProcessed      = "success"
 )
 
 // Tx represents database transaction row
@@ -41,10 +42,10 @@ type Tx struct {
 
 	Type TxType
 
-	ToWalletID int64
+	ToWalletID *int64
 	ToWallet   *queries.Wallet `gorm:"foreignkey:ToWalletID;association_autoupdate:false;association_autocreate:false"`
-	ToAddress  string
-	ToPhone    string
+	ToAddress  *string
+	ToPhone    *string
 
 	Amount *postgres.Decimal
 

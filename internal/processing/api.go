@@ -7,6 +7,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/ericlagergren/decimal"
 	"github.com/ericlagergren/decimal/sql/postgres"
 	"github.com/jinzhu/gorm"
@@ -14,9 +15,6 @@ import (
 )
 
 var (
-	// ErrNoOneTxAwaitsWallet if no one transaction affected.
-	ErrNoOneTxAwaitsWallet = errors.New("processing: no one tx awaits wallet")
-
 	// ErrTxAmountToBig returned when tx exceed amount threshold
 	ErrTxAmountToBig = errors.New("processing: tx is exceed amount threshold")
 
@@ -37,11 +35,21 @@ const (
 	InternalTxPhoneRecipient
 )
 
-// InternalTxRecipient describes
+// InternalTxRecipient describes recipient
 type InternalTxRecipient struct {
-	Type   InternalTxRecipientType
-	Phone  string
-	Wallet *queries.Wallet
+	t      InternalTxRecipientType
+	phone  string
+	wallet *queries.Wallet
+}
+
+// NewPhoneRecipient sets recipient by phone number (for non-existing recipient wallets)
+func NewPhoneRecipient(phone string) InternalTxRecipient {
+	return InternalTxRecipient{t: InternalTxPhoneRecipient, phone: phone}
+}
+
+// NewWalletRecipient sets recipient by wallet
+func NewWalletRecipient(wallet *queries.Wallet) InternalTxRecipient {
+	return InternalTxRecipient{t: InternalTxWalletRecipient, wallet: wallet}
 }
 
 // IApi represents wallet transaction operations and implements simplified processing center, which able to
@@ -55,7 +63,6 @@ type IApi interface {
 
 	// NotifyUserCreatesWallet lookups pending transactions which waits wallet of this user and perform transactions.
 	// Returns ErrNoOneTxAwaitsWallet if no one affected.
-	// May return ErrNoSuchWallet.
 	NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wallet) error
 }
 
@@ -76,18 +83,24 @@ func New(db *gorm.DB, coordinator nodes.ICoordinator, balanceHelper helpers.IBal
 }
 
 // SendByPhone is IApi implementation
-func (api *Api) SendInternal(ctx context.Context, wallet *queries.Wallet, recipient InternalTxRecipient, amount *decimal.Big) (newTx *Tx, err error) {
+func (api *Api) SendInternal(
+	ctx context.Context,
+	wallet *queries.Wallet,
+	recipient InternalTxRecipient,
+	amount *decimal.Big,
+) (newTx *Tx, err error) {
 	span, ctx := StartSpanFromContext(ctx, "send_internal")
 	defer span.Finish()
 
 	span.LogKV(
 		"from_wallet_id", wallet.ID,
-		"to_wallet_id", recipient.Wallet.ID,
+		"to_wallet_id", recipient.wallet,
+		"to_phone", recipient.phone,
 		"coin", wallet.Coin.ShortName,
 		"amount", amount,
 	)
 
-	// check amount, it should be greater the zero
+	// check amount, it should be greater then zero
 	switch amount.Sign() {
 	case 0:
 		err = ErrZeroAmount
@@ -97,24 +110,32 @@ func (api *Api) SendInternal(ctx context.Context, wallet *queries.Wallet, recipi
 		return
 	}
 
+	var validationErrs error
+
 	// create new tx in transaction for future select for update
-	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, tx *gorm.DB) error {
+	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, dbTx *gorm.DB) error {
 		// query status explicitly, no clear way with gorm :(
 		var stateModel TxStatus
-		err = tx.Model(&stateModel).Where("name = ?", TxStateJustCreated).First(&stateModel).Error
+		err = dbTx.Model(&stateModel).Where("name = ?", TxStateValidate).First(&stateModel).Error
 		if err != nil {
 			return err
 		}
 
-		// create new wallet right in done state
+		// create new wallet
 		pTx := &Tx{
 			FromWallet: wallet,
-			ToWallet:   recipient.Wallet,
 			Type:       TxInternal,
 			Amount:     &postgres.Decimal{V: amount},
 			Status:     &stateModel,
 		}
-		err = tx.Create(pTx).Error
+		// fill tx fields depending on recipient type
+		switch recipient.t {
+		case InternalTxPhoneRecipient:
+			pTx.ToPhone = &recipient.phone
+		case InternalTxWalletRecipient:
+			pTx.ToWallet = recipient.wallet
+		}
+		err = dbTx.Create(pTx).Error
 		if err != nil {
 			return err
 		}
@@ -123,19 +144,19 @@ func (api *Api) SendInternal(ctx context.Context, wallet *queries.Wallet, recipi
 		span.LogKV("new_tx_id", newTx.ID)
 
 		// preform steps
-		newTx, err = StepTx(ctx, api.database, newTx, &StepResources{
+		newTx, validationErrs, err = StepTx(ctx, dbTx, newTx, &SmResources{
 			Coordinator:   api.coordinator,
 			BalanceHelper: api.balanceHelper,
 		})
 
-		return nil
+		return err
 	})
 	if err != nil {
-		return
-	}
-
-	if err != nil {
-		span.LogKV("err", err)
+		trace.LogError(span, err)
+	} else if validationErrs != nil {
+		// don't report as error
+		span.LogKV("validation_errs", validationErrs, "message", "validation errs occurred")
+		err = validationErrs
 	}
 	return
 }
@@ -189,19 +210,81 @@ func (api *Api) GetTxsesSum(ctx context.Context, wallet *queries.Wallet) (sum *d
 			sum = totalSum.V
 			span.LogKV("income", income.V)
 		} else {
-			span.LogKV("msg", "no txs for this wallet")
+			trace.LogMsg(span, "no txs for this wallet")
 		}
 		return nil
 	})
 
 	if err != nil {
-		span.LogKV("err", err)
+		trace.LogError(span, err)
 	}
 	span.LogKV("sum", sum)
 	return
 }
 
+const selectWalletDstTxs = `select txs.*
+from txs
+inner join wallets on txs.from_wallet_id = wallets.id
+where
+    txs.to_phone = $1 and
+    wallets.coin_id = $2 and
+    txs.status_id = (select id from tx_statuses where name = $3)`
+
 // NotifyUserCreatesWallet implements IApi interface
-func (*Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wallet) error {
-	panic("implement me")
+func (api *Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wallet) (err error) {
+	span, ctx := StartSpanFromContext(ctx, "notify_wallet_created")
+	defer span.Finish()
+
+	span.LogKV("wallet_id", wallet.ID, "wallet_coin", wallet.Coin.ShortName)
+
+	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, dbTx *gorm.DB) (err error) {
+		// query status explicitly, no clear way with gorm :(
+		var stateModel TxStatus
+		err = dbTx.Model(&stateModel).Where("name = ?", TxStateAwaitRecipient).First(&stateModel).Error
+		if err != nil {
+			return err
+		}
+
+		// update first
+		err = dbTx.Model(&Tx{}).Where(
+			`txs.to_phone = ? and
+			txs.from_wallet_id in (select id from wallets where coin_id = ?) and
+    		txs.status_id = ?`,
+			wallet.UserPhone, wallet.CoinID, stateModel.ID,
+		).Update("ToWalletID", wallet.ID).Error
+		if err != nil {
+			return
+		}
+
+		// lookup tx which awaits phone number associated with this wallet
+		// then select (cannot do it in single query)
+		var txsToUpdate []*Tx
+		err = dbTx.Model(&Tx{}).Joins(
+			"inner join wallets on txs.from_wallet_id = wallets.id",
+		).Where(
+			`txs.to_phone = ? and
+    		wallets.coin_id = ? and
+    		txs.status_id = ?`,
+			wallet.UserPhone, wallet.CoinID, stateModel.ID,
+		).Preload(
+			"FromWallet",
+		).Preload(
+			"FromWallet.Coin",
+		).Preload(
+			"ToWallet",
+		).Preload(
+			"Status",
+		).Find(&txsToUpdate).Error
+
+		// it's not good idea to transform all dependent transaction in single db transaction, need to elaborate...
+		for _, tx := range txsToUpdate {
+			// ignore validation errs, TODO should notify user
+			_, _, err = StepTx(ctx, dbTx, tx, &SmResources{
+				Coordinator:   api.coordinator,
+				BalanceHelper: api.balanceHelper,
+			})
+		}
+		return
+	})
+	return
 }

@@ -3,94 +3,96 @@ package processing
 import (
 	"context"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
-		"git.zam.io/wallet-backend/wallet-api/internal/helpers"
+	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
-type StepResources struct {
+type SmResources struct {
 	Coordinator   nodes.ICoordinator
 	BalanceHelper helpers.IBalance
 }
 
 // StepTx performs as much transaction steps as possible depends on current transaction state
-func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *StepResources) (newTx *Tx, err error) {
+func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *SmResources) (newTx *Tx, validateErrs error, err error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "step_tx")
 	defer span.Finish()
 
-	var (
-		validateErrs error
-		txForUpdate = &Tx{ID: tx.ID}
-	)
-	// select tx for update to lock tx
-	err = dbTx.Set(
-		"gorm:query_option", "FOR UPDATE",
-	).Preload("FromWallet").Preload("ToWallet").Preload("Status").Preload("FromWallet.Coin").First(
-		txForUpdate, txForUpdate,
-	).Error
-	if err != nil {
-		return
-	}
+	span.LogKV("tx_id", tx.ID)
 
 	var nextStep = true
 	// step inside loop until steps available
-	for nextStep {
-		// get state func
-		f := getStateFunc(txForUpdate.Status.Name)
-		// there is nothing more to do, returning
-		if f == nil {
-			break
-		}
+	for stepNum := 0; nextStep; stepNum++ {
+		trace.InsideSpan(ctx, "step_evaluation", func(ctx context.Context, span opentracing.Span) {
+			stateName := tx.Status.Name
 
-		var (
-			newState         string
-			stepValidateErrs error
-		)
-		newState, nextStep, stepValidateErrs, err = validateTxState(ctx, txForUpdate, res)
-		if err != nil {
-			return
-		}
+			// get state func
+			f, fName := getStateFunc(stateName), getStateFuncName(stateName)
 
-		// query status explicitly, no clear way with gorm :(
-		var stateModel TxStatus
-		err = dbTx.Model(&stateModel).Where("name = ?", newState).First(&stateModel).Error
-		if err != nil {
-			return
-		}
+			span.LogKV("step_func", fName, "step_num", stepNum, "state_name", stateName)
 
-		// update model
-		txForUpdate.Status = &stateModel
-		txForUpdate.StatusID = stateModel.ID
-		err = dbTx.Model(txForUpdate).Update("StatusID", stateModel.ID).Error
-		if err != nil {
-			return
-		}
+			// there is nothing more to do, returning
+			if f == nil {
+				nextStep = false
+				return
+			}
 
-		if stepValidateErrs != nil {
-			validateErrs = merrors.Append(validateErrs, stepValidateErrs)
-		}
+			var (
+				newState         string
+				stepValidateErrs error
+			)
+			newState, nextStep, stepValidateErrs, err = f(ctx, tx, res)
+			if err != nil {
+				return
+			}
+
+			span.LogKV("new_state", newState, "is_stepping_further", nextStep)
+
+			if stepValidateErrs != nil {
+				trace.LogErrorWithMsg(span, stepValidateErrs, "step validation errors")
+			}
+
+			// query status explicitly, no clear way with gorm :(
+			var stateModel TxStatus
+			err = dbTx.Model(&stateModel).Where("name = ?", newState).First(&stateModel).Error
+			if err != nil {
+				return
+			}
+
+			// update model
+			tx.Status = &stateModel
+			tx.StatusID = stateModel.ID
+			err = dbTx.Model(tx).Update("StatusID", stateModel.ID).Error
+			if err != nil {
+				trace.LogErrorWithMsg(span, err, "tx updating error")
+				return
+			}
+
+			if stepValidateErrs != nil {
+				validateErrs = merrors.Append(validateErrs, stepValidateErrs)
+			}
+		})
 	}
-
-	if validateErrs != nil {
-		span.LogKV("validation_errs", validateErrs)
-		err = validateErrs
+	if err != nil {
 		return
 	}
-	newTx = txForUpdate
-
+	newTx = tx
 	return
 }
 
 //
-type stateFunc func(ctx context.Context, tx *Tx, res *StepResources) (newState string, inWait bool, validateErrs, err error)
+type stateFunc func(ctx context.Context, tx *Tx, res *SmResources) (newState string, inWait bool, validateErrs, err error)
 
 //
 func getStateFunc(state string) stateFunc {
 	switch state {
-	case TxStateJustCreated:
+	case TxStateValidate:
 		return validateTxState
+	case TxStateAwaitRecipient:
+		return recipientWalletCreated
 	case TxStateProcessed, TxStateDeclined:
 		return nil
 	default:
@@ -98,7 +100,27 @@ func getStateFunc(state string) stateFunc {
 	}
 }
 
-func validateTxState(ctx context.Context, tx *Tx, res *StepResources) (newState string, nextStep bool, validateErrs, err error) {
+func getStateFuncName(state string) string {
+	switch state {
+	case TxStateValidate:
+		return "validating_tx"
+	case TxStateAwaitRecipient:
+		return "await_recipient"
+	case TxStateProcessed, TxStateDeclined:
+		return "noop"
+	default:
+		return "noop"
+	}
+}
+
+func recipientWalletCreated(ctx context.Context, tx *Tx, res *SmResources) (newState string, nextStep bool, validateErrs, err error) {
+	// send transaction back to validation state due to sender balance can be changed while awaiting recipient wallet creation
+	newState = TxStateValidate
+	nextStep = true
+	return
+}
+
+func validateTxState(ctx context.Context, tx *Tx, res *SmResources) (newState string, nextStep bool, validateErrs, err error) {
 	span, _ := opentracing.StartSpanFromContext(ctx, "validate_tx")
 	defer span.Finish()
 
@@ -109,9 +131,14 @@ func validateTxState(ctx context.Context, tx *Tx, res *StepResources) (newState 
 	if tx.FromWallet == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx src wallet is missing"))
 	}
+	if tx.ToPhone == nil && tx.ToWalletID == nil {
+		validateErrs = merrors.Append(
+			validateErrs,
+			errors.New("either to_phone and to_wallet is empty, at least one should ne provided"),
+		)
+	}
 	if validateErrs != nil {
-		span.LogKV("msg", "internal validations failed, code is wrong!", "validation_errs", validateErrs)
-		newState = TxStateJustCreated
+		newState = TxStateDeclined
 		return
 	}
 
@@ -141,7 +168,12 @@ func validateTxState(ctx context.Context, tx *Tx, res *StepResources) (newState 
 	if validateErrs != nil {
 		newState = TxStateDeclined
 	} else {
-		newState = TxStateProcessed
+		switch {
+		case tx.ToWalletID != nil:
+			newState = TxStateProcessed
+		case tx.ToPhone != nil:
+			newState = TxStateAwaitRecipient
+		}
 	}
 	return
 }

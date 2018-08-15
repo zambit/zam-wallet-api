@@ -23,9 +23,9 @@ func CreateWallet(tx db.ITx, wallet Wallet) (newWallet Wallet, err error) {
 	err = tx.QueryRowx(
 		`INSERT INTO wallets (name, user_phone, address, coin_id)
          VALUES ($1, $2, $3, (SELECT id FROM coins WHERE short_name = $4 AND enabled = true))
-         RETURNING id`,
+         RETURNING id, coin_id`,
 		wallet.Name, wallet.UserPhone, wallet.Address, strings.ToUpper(wallet.Coin.ShortName),
-	).Scan(&wallet.ID)
+	).Scan(&wallet.ID, &wallet.CoinID)
 	if err != nil {
 		if pgErr, ok := err.(*pq.Error); ok {
 			switch {

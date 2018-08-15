@@ -48,8 +48,7 @@ func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
 		if err != nil {
 			return
 		}
-
-		span.LogKV("")
+		span.LogKV("user_phone", userPhone)
 
 		// try send money
 		tx, err := walletApi.SendToPhone(ctx, userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))

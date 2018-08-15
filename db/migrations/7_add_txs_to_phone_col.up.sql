@@ -1,0 +1,1 @@
+alter table txs add column to_phone varchar(255);

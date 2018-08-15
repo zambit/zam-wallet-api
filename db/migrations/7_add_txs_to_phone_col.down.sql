@@ -1,0 +1,1 @@
+alter table txs drop column to_phone;
