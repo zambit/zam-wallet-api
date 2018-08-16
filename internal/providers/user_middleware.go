@@ -2,7 +2,7 @@ package providers
 
 import (
 	"context"
-	wmiddlewares "git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
+	wmiddlewares "git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"git.zam.io/wallet-backend/web-api/pkg/server/middlewares"
 	"git.zam.io/wallet-backend/web-api/pkg/services/sessions"

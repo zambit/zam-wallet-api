@@ -4,7 +4,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
-	"git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
+	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/ericlagergren/decimal"
