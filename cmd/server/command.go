@@ -5,6 +5,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/cmd/common"
 	"git.zam.io/wallet-backend/wallet-api/config"
 	internalproviders "git.zam.io/wallet-backend/wallet-api/internal/providers"
+	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/isc"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/txs"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/btc"
@@ -53,6 +54,7 @@ func serverMain(cfg config.RootScheme) (err error) {
 	// provide api router
 	utils.MustProvide(c, providers.RootRouter, dig.Name("root"))
 	utils.MustProvide(c, internalproviders.ApiRoutes, dig.Name("api_routes"))
+	utils.MustProvide(c, internalproviders.InternalApiRoutes, dig.Name("internal_api_routes"))
 
 	// provide icex converter
 	utils.MustProvide(c, internalproviders.CoinConverter)
@@ -65,6 +67,7 @@ func serverMain(cfg config.RootScheme) (err error) {
 	utils.MustInvoke(c, static.Register)
 	utils.MustInvoke(c, wallets.Register)
 	utils.MustInvoke(c, txs.Register)
+	utils.MustInvoke(c, isc.Register)
 
 	// Run server!
 	utils.MustInvoke(c, func(engine *gin.Engine) error {

@@ -26,4 +26,7 @@ type Scheme struct {
 
 	// Notificator
 	Notificator server.NotificatorScheme
+
+	// InternalAccessToken token which is required to access internal endpoints
+	InternalAccessToken string
 }
