@@ -13,6 +13,7 @@ server:
         method: HS256
     notificator:
         url: '$NOTIFICATIONS_URL'
+    InternalAccessToken: '$ISC_ACCESS_TOKEN'
 isc:
     brokeruri: '$BROKER_URI'
     statsenabled: false

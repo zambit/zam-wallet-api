@@ -1,15 +1,15 @@
 package isc
 
 import (
+	"context"
+	decimal2 "git.zam.io/wallet-backend/common/pkg/types/decimal"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
+	"github.com/ericlagergren/decimal"
 	"github.com/gin-gonic/gin"
 	"github.com/opentracing/opentracing-go"
-	"context"
-	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
-	"github.com/ericlagergren/decimal"
-	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
-	decimal2 "git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"strings"
 )
 
@@ -112,7 +112,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 			Count: wtsCount,
 			TotalBalance: map[string]*decimal2.View{
 				strings.ToLower(defaultCryptoCurrency): (*decimal2.View)(totalDefaultCurrencyBalance),
-				strings.ToLower(params.Convert): (*decimal2.View)(totalFiatBalance),
+				strings.ToLower(params.Convert):        (*decimal2.View)(totalFiatBalance),
 			},
 		}
 
