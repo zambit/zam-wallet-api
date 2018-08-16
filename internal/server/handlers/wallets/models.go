@@ -1,10 +1,12 @@
 package wallets
 
 import (
+	decimal2 "git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
-	"github.com/ericlagergren/decimal"
 	"strconv"
 	"strings"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
+	"github.com/ericlagergren/decimal"
 )
 
 // CreateRequest used to parse create wallet request body params
@@ -34,24 +36,30 @@ type GetAllRequest struct {
 
 func DefaultGetAllRequest() GetAllRequest {
 	return GetAllRequest{
-		Count: 10,
+		Count:   10,
 		Convert: "usd",
 	}
 }
 
 // View used to represent wallet model
 type View struct {
-	ID       string                  `json:"id"`
-	Coin     string                  `json:"coin"`
-	Name     string                  `json:"wallet_name"`
-	Address  string                  `json:"address"`
-	Balances map[string]*BalanceView `json:"balances"`
+	ID       string                    `json:"id"`
+	Coin     string                    `json:"coin"`
+	Name     string                    `json:"wallet_name"`
+	Address  string                    `json:"address"`
+	Balances map[string]*decimal2.View `json:"balances"`
 }
 
-// AdditionalBalance used to pass additional balance
-type AdditionalBalance struct {
+// AdditionalRate used to convert crypto-currency balance into additional currency
+type AdditionalRate struct {
+	*convert.Rate
 	Currency string
-	Amount   *decimal.Big
+}
+
+// AdditionalRates same as AdditionalRate, but for multiple crypto-currency balances
+type AdditionalRates struct {
+	convert.MultiRate
+	Currency string
 }
 
 // Response represents create and get wallets response
@@ -66,13 +74,21 @@ type AllResponse struct {
 	Wallets []View `json:"wallets"`
 }
 
+var zeroDecimalView = (*decimal2.View)(new(decimal.Big).SetFloat64(0))
+
 // ResponseFromWallet renders wallet view converting wallet id into string, also uses additional balances mapping
-func ResponseFromWallet(wallet wallets.WalletWithBalance, additionalBalance AdditionalBalance) Response {
-	balances := map[string]*BalanceView{
-		strings.ToLower(wallet.Coin.ShortName): (*BalanceView)(wallet.Balance),
+func ResponseFromWallet(wallet wallets.WalletWithBalance, additionalRate AdditionalRate) Response {
+	balances := map[string]*decimal2.View{
+		strings.ToLower(wallet.Coin.ShortName): (*decimal2.View)(wallet.Balance),
 	}
-	if additionalBalance.Currency != "" {
-		balances[additionalBalance.Currency] = (*BalanceView)(additionalBalance.Amount)
+	if additionalRate.Currency != ""  {
+		var value *decimal2.View
+		if additionalRate.Rate != nil {
+			value = (*decimal2.View)(additionalRate.Convert(wallet.Balance))
+		} else {
+			value = zeroDecimalView
+		}
+		balances[additionalRate.Currency] = value
 	}
 
 	return Response{
@@ -91,7 +107,7 @@ func AllResponseFromWallets(
 	wallets []wallets.WalletWithBalance,
 	totalCount int64,
 	hasNext bool,
-	additionalBalances map[int64]AdditionalBalance,
+	additionalRates AdditionalRates,
 ) AllResponse {
 	views := make([]View, 0, len(wallets))
 	var next string
@@ -100,11 +116,13 @@ func AllResponseFromWallets(
 	}
 
 	for _, w := range wallets {
-		var ab AdditionalBalance
-		if additionalBalances != nil {
-			ab = additionalBalances[w.ID]
-		}
-		views = append(views, ResponseFromWallet(w, ab).Wallet)
+		views = append(views, ResponseFromWallet(
+			w,
+			AdditionalRate{
+				additionalRates.CurrencyRate(w.Coin.ShortName),
+				additionalRates.Currency,
+			},
+		).Wallet)
 	}
 	return AllResponse{
 		Count:   totalCount,

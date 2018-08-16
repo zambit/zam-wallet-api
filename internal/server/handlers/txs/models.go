@@ -1,6 +1,7 @@
 package txs
 
 import (
+	"git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"strconv"
 	"strings"
@@ -8,19 +9,19 @@ import (
 
 // SendRequest used to parse send tx request body
 type SendRequest struct {
-	WalletID  int64        `json:"wallet_id,string" validate:"required"`
-	Recipient string       `json:"recipient" validate:"required,phone"`
-	Amount    *DecimalView `json:"amount" validate:"required"`
+	WalletID  int64         `json:"wallet_id,string" validate:"required"`
+	Recipient string        `json:"recipient" validate:"required,phone"`
+	Amount    *decimal.View `json:"amount" validate:"required"`
 }
 
 // View tx api representation
 type View struct {
-	ID        string       `json:"id"`
-	Direction string       `json:"direction"`
-	Status    string       `json:"status"`
-	Coin      string       `json:"coin"`
-	Recipient string       `json:"recipient"`
-	Amount    *DecimalView `json:"amount"`
+	ID        string        `json:"id"`
+	Direction string        `json:"direction"`
+	Status    string        `json:"status"`
+	Coin      string        `json:"coin"`
+	Recipient string        `json:"recipient"`
+	Amount    *decimal.View `json:"amount"`
 }
 
 // SendResponse send request response
@@ -48,6 +49,6 @@ func ToView(tx *processing.Tx, userPhone string) *View {
 		Status:    tx.Status.Name,
 		Coin:      strings.ToLower(tx.FromWallet.Coin.ShortName),
 		Recipient: recipient,
-		Amount:    (*DecimalView)(tx.Amount.V),
+		Amount:    (*decimal.View)(tx.Amount.V),
 	}
 }

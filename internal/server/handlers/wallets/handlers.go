@@ -2,18 +2,17 @@ package wallets
 
 import (
 	"git.zam.io/wallet-backend/common/pkg/merrors"
-	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/middlewares"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
-	"github.com/ericlagergren/decimal"
 	"github.com/gin-gonic/gin"
 	ot "github.com/opentracing/opentracing-go"
 	"net/http"
 	"strings"
-	"sync"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
+	"context"
 )
 
 var (
@@ -72,7 +71,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 
 		// prepare response body
 		code = 201
-		resp = ResponseFromWallet(wallet, AdditionalBalance{})
+		resp = ResponseFromWallet(wallet, AdditionalRate{})
 
 		return
 	}
@@ -80,7 +79,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 
 // GetFactory creates handler which used to query wallet which is specified by path param 'wallet_id', returns
 // 'Response' on success.
-func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.HandlerFunc {
+func GetFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
@@ -117,35 +116,29 @@ func GetFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Handler
 		}
 
 		// perform convertation if this argument presented
-		var additionalBalance AdditionalBalance
+		var additionalRate AdditionalRate
 		if params.Convert != "" {
-			var err error
+			trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
+				span.LogKV("convert_to", params.Convert)
+				span.LogKV("convert_from", wallet.Coin.ShortName)
 
-			span, ctx := ot.StartSpanFromContext(ctx, "converting_balance")
-			span.LogKV("convert_to", params.Convert)
-			trace.LogMsg(span, "converting wallet balance to additional currencies")
-
-			var convertedBalance *decimal.Big
-			convertedBalance, err = converter.ConvertToFiat(ctx, wallet.Coin.ShortName, wallet.Balance, params.Convert)
-			if err != nil {
-				trace.LogError(span, err)
-			} else {
-				additionalBalance = AdditionalBalance{
-					Currency: strings.ToLower(params.Convert),
-					Amount:   convertedBalance,
+				rate, err := converter.GetRate(ctx, wallet.Coin.ShortName, params.Convert)
+				if err != nil {
+					return err
 				}
-			}
-			span.Finish()
+				additionalRate = AdditionalRate{Rate: rate, Currency: params.Convert}
+				return nil
+			})
 		}
 
 		// prepare response body
-		resp = ResponseFromWallet(wallet, additionalBalance)
+		resp = ResponseFromWallet(wallet, additionalRate)
 		return
 	}
 }
 
 // GetAllFactory
-func GetAllFactory(api *wallets.Api, converter helpers.ICoinConverter) base.HandlerFunc {
+func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
@@ -174,71 +167,29 @@ func GetAllFactory(api *wallets.Api, converter helpers.ICoinConverter) base.Hand
 		}
 
 		// perform convertation if this argument presented for all wallets
-		var additionalBalances map[int64]AdditionalBalance
+		var additionalRates AdditionalRates
 		if params.Convert != "" && len(wts) > 0 {
-			var err error
+			nonZeroWts := filterNonZeroWallets(wts)
+			trace.InsideSpanE(ctx, "converting_balances_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
+				coinsList := make([]string, len(nonZeroWts))
+				for i, w := range nonZeroWts {
+					coinsList[i] = w.Coin.ShortName
+				}
 
-			additionalBalances = make(map[int64]AdditionalBalance, len(wts))
+				span.LogKV("convert_to", params.Convert)
+				span.LogKV("convert_from", strings.Join(coinsList, ", "))
 
-			span := span.Tracer().StartSpan("converting_balances_for_wallets", ot.ChildOf(span.Context()))
-			span.LogKV("convert_to", params.Convert)
-			trace.LogMsg(span, "converting wallet balance to additional currency")
-
-			convert := func(w wallets.WalletWithBalance) AdditionalBalance {
-				var convertedBalance *decimal.Big
-				convertedBalance, err = converter.ConvertToFiat(ctx, w.Coin.ShortName, w.Balance, params.Convert)
+				rates, err := converter.GetMultiRate(ctx, coinsList, params.Convert)
 				if err != nil {
-					trace.LogError(span, err)
-					return AdditionalBalance{}
-				} else {
-					return AdditionalBalance{
-						Currency: strings.ToLower(params.Convert),
-						Amount:   convertedBalance,
-					}
+					return err
 				}
-			}
-
-			// since number of wallets highly limited, around 4-8 at all, it's more optimal to use goroutine for each
-			// wallet request, not workers pool
-			switch len(wts) {
-			case 1:
-				res := convert(wts[0])
-				additionalBalances[wts[0].ID] = res
-			default:
-				type res struct {
-					wID     int64
-					balance AdditionalBalance
-				}
-
-				var wg sync.WaitGroup
-				wg.Add(len(wts))
-				resChan := make(chan res)
-
-				for _, w := range wts {
-					go func(w wallets.WalletWithBalance) {
-						resChan <- res{
-							wID:     w.ID,
-							balance: convert(w),
-						}
-						wg.Done()
-					}(w)
-				}
-
-				go func() {
-					wg.Wait()
-					close(resChan)
-				}()
-
-				for r := range resChan {
-					additionalBalances[r.wID] = r.balance
-				}
-			}
-
-			span.Finish()
+				additionalRates = AdditionalRates{MultiRate: rates, Currency: params.Convert}
+				return nil
+			})
 		}
 
 		// prepare response body
-		resp = AllResponseFromWallets(wts, totalCount, hasNext, additionalBalances)
+		resp = AllResponseFromWallets(wts, totalCount, hasNext, additionalRates)
 		return
 	}
 }
@@ -251,4 +202,14 @@ func getUserPhone(c *gin.Context) (userPhone string, err error) {
 		err = errUserMiddlewareMissing
 	}
 	return
+}
+
+func filterNonZeroWallets(wts []wallets.WalletWithBalance) []wallets.WalletWithBalance {
+	nWts := make([]wallets.WalletWithBalance, 0, len(wts))
+	for _, w := range wts {
+		if w.Balance != nil && w.Balance.Sign() != 0 {
+			nWts = append(nWts, w)
+		}
+	}
+	return nWts
 }

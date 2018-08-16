@@ -5,8 +5,8 @@ import (
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/dig"
-	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 )
 
 // Dependencies
@@ -19,7 +19,7 @@ type Dependencies struct {
 
 	Api *wallets.Api
 
-	Converter helpers.ICoinConverter
+	Converter convert.ICryptoCurrency
 }
 
 // Register

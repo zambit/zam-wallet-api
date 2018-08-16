@@ -1,12 +1,12 @@
 package providers
 
 import (
-	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
-	"git.zam.io/wallet-backend/wallet-api/internal/helpers/icex"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert/icex"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 )
 
-// CoinConverter create icex coin converter with default host
-func CoinConverter() (c helpers.ICoinConverter, err error) {
+// CryptoCurrency create icex coin converter with default host
+func CoinConverter() (c convert.ICryptoCurrency, err error) {
 	defer func() {
 		r := recover()
 		if r != nil {
