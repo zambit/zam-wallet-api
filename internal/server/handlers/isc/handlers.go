@@ -67,9 +67,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 					ctx,
 					"converting_coin_balances",
 					func(ctx context.Context, span opentracing.Span) error {
-						rates, err := cryptoConverter.GetMultiRate(
-							ctx, append([]string{"btc"}, coinNames...), params.Convert,
-						)
+						rates, err := cryptoConverter.GetMultiRate(ctx, coinNames, params.Convert)
 						if err != nil {
 							return err
 						}

@@ -25,35 +25,35 @@ var coinNameToIcexNameMapping = map[string]string{
 
 // fiatNamesSet fixed set of supported currencies
 var fiatNamesSet = map[string]struct{}{
-	"AUD": {},
-	"BRL": {},
-	"CAD": {},
-	"CHF": {},
-	"CNY": {},
-	"CZK": {},
-	"DKK": {},
-	"EUR": {},
-	"GBP": {},
-	"HKD": {},
-	"HUF": {},
-	"IDR": {},
-	"ILS": {},
-	"INR": {},
-	"JPY": {},
-	"KRW": {},
-	"MXN": {},
-	"MYR": {},
-	"NOK": {},
-	"NZD": {},
-	"PHP": {},
-	"PLN": {},
-	"RUB": {},
-	"SEK": {},
-	"SGD": {},
-	"THB": {},
-	"TRY": {},
-	"ZAR": {},
-	"USD": {},
+	"aud": {},
+	"brl": {},
+	"cad": {},
+	"chf": {},
+	"cny": {},
+	"czk": {},
+	"dkk": {},
+	"eur": {},
+	"gbp": {},
+	"hkd": {},
+	"huf": {},
+	"idr": {},
+	"ils": {},
+	"inr": {},
+	"jpy": {},
+	"krw": {},
+	"mxn": {},
+	"myr": {},
+	"nok": {},
+	"nzd": {},
+	"php": {},
+	"pln": {},
+	"rub": {},
+	"sek": {},
+	"sgd": {},
+	"thb": {},
+	"try": {},
+	"zar": {},
+	"usd": {},
 }
 
 const (
@@ -84,8 +84,8 @@ type response struct {
 
 // ICoinConverter uses icex.ch service get currencies rates values
 type CryptoCurrency struct {
-	Client   http.Client
-	ICEXHost string
+	client   http.Client
+	icexHost string
 }
 
 // New coin converter which uses icex.ch service, requires icex host parameter.
@@ -103,7 +103,7 @@ func New(icexHost string) convert.ICryptoCurrency {
 			))
 		}
 	}
-	return &CryptoCurrency{ICEXHost: icexHost}
+	return &CryptoCurrency{icexHost: icexHost}
 }
 
 // ToFiat implements ICryptoCurrency, uses opentracing to trace requests
@@ -150,7 +150,7 @@ func (converter *CryptoCurrency) GetMultiRate(
 		mr = make(convert.MultiRate, len(dst.Data))
 		for _, d := range dst.Data {
 			price := decimal.Big{}
-			price.SetFloat64(dst.Data[0].Price.Value)
+			price.SetFloat64(d.Price.Value)
 			mr[strings.ToUpper(d.Short)] = (convert.Rate)(price)
 		}
 
@@ -176,7 +176,8 @@ func (converter *CryptoCurrency) getRates(ctx context.Context, coins []string, d
 	}
 
 	// check fiat-currency supported
-	_, ok := fiatNamesSet[strings.ToUpper(dstCurrencyName)]
+	dstCurrencyName = strings.ToLower(dstCurrencyName)
+	_, ok := fiatNamesSet[dstCurrencyName]
 	if !ok {
 		err = convert.ErrFiatCurrencyName
 		return
@@ -195,18 +196,19 @@ func (converter *CryptoCurrency) getRates(ctx context.Context, coins []string, d
 		additionalCurrencies = strings.Join(coins[1:], ",")
 	}
 
-	//
-	url, err := url.Parse(converter.ICEXHost)
-	if err != nil {
-		err = errors.Wrap(err, "icex_conert: invalid icex host")
-		return
-	}
-	url.Path = coinValueEndpoint + icexCoinName
-	if additionalCurrencies != "" {
-		url.RawQuery = "with="+additionalCurrencies
-	}
+	// parse icex host, value is trusted because verified in constructor
+	u, _ := url.Parse(converter.icexHost)
+	u.Path = coinValueEndpoint + icexCoinName
 
-	endpointUrl := url.String()
+	// prepare query
+	queryValues := make(url.Values, 2)
+	queryValues.Set("convert", dstCurrencyName)
+	if additionalCurrencies != "" {
+		queryValues.Set("with", additionalCurrencies)
+	}
+	u.RawQuery = queryValues.Encode()
+
+	endpointUrl := u.String()
 	span.LogKV("icex_endpoint_url", endpointUrl)
 	req, err := http.NewRequest("GET", endpointUrl, nil)
 	if err != nil {
@@ -214,7 +216,7 @@ func (converter *CryptoCurrency) getRates(ctx context.Context, coins []string, d
 		return
 	}
 
-	resp, err := converter.Client.Do(req.WithContext(ctx))
+	resp, err := converter.client.Do(req.WithContext(ctx))
 	if err != nil {
 		err = convert.ErrCryptoCurrencyName
 		return
