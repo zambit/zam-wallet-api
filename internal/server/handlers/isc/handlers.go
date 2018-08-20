@@ -13,7 +13,10 @@ import (
 	"strings"
 )
 
-const defaultCryptoCurrency = "BTC"
+const (
+	defaultCryptoCurrency = "BTC"
+	defaultFeatCurrency   = "usd"
+)
 
 // UserStatFactory returns total user wallets balances
 func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) base.HandlerFunc {
@@ -28,12 +31,12 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 			return
 		}
 		if params.Convert == "" {
-			params.Convert = "usd"
+			params.Convert = defaultCryptoCurrency
 		}
 
 		span.LogKV("user_phone", params.UserPhone)
 
-		wtsCount, totalFiatBalance, totalDefaultCurrencyBalance := 0, new(decimal.Big), (*decimal.Big)(nil)
+		wtsCount, totalFiatBalance, totalBalanceInDefCurr := 0, new(decimal.Big), (*decimal.Big)(nil)
 		err = trace.InsideSpanE(
 			ctx,
 			"querying_user_wallets_balance",
@@ -52,14 +55,14 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 
 				// calculate total fiat balance
 				coinNames := nonZeroWalletsCoins(wts)
-				addViewCurrencyCoin := true
+				addDefaultCurrencyCoin := true
 				for _, name := range coinNames {
 					if name == defaultCryptoCurrency {
-						addViewCurrencyCoin = false
+						addDefaultCurrencyCoin = false
 						break
 					}
 				}
-				if addViewCurrencyCoin {
+				if addDefaultCurrencyCoin {
 					coinNames = append(coinNames, defaultCryptoCurrency)
 				}
 
@@ -67,7 +70,9 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 					ctx,
 					"converting_coin_balances",
 					func(ctx context.Context, span opentracing.Span) error {
-						rates, err := cryptoConverter.GetMultiRate(ctx, coinNames, params.Convert)
+						rates, err := convert.GetMultiRateDefaultFiat(
+							cryptoConverter, ctx, coinNames, params.Convert, defaultFeatCurrency,
+						)
 						if err != nil {
 							return err
 						}
@@ -85,11 +90,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 
 						// calculate total btc balance by reverse converting total fiat balance
 						defaultCurrencyRate := rates.CurrencyRate(defaultCryptoCurrency)
-
-						totalDefaultCurrencyBalance = new(decimal.Big)
-						totalDefaultCurrencyBalance = totalDefaultCurrencyBalance.Quo(
-							totalFiatBalance, (*decimal.Big)(defaultCurrencyRate),
-						)
+						totalBalanceInDefCurr = defaultCurrencyRate.ReverseConvert(totalFiatBalance)
 
 						return nil
 					},
@@ -109,7 +110,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 		resp = UserStatsResponseView{
 			Count: wtsCount,
 			TotalBalance: map[string]*decimal2.View{
-				strings.ToLower(defaultCryptoCurrency): (*decimal2.View)(totalDefaultCurrencyBalance),
+				strings.ToLower(defaultCryptoCurrency): (*decimal2.View)(totalBalanceInDefCurr),
 				strings.ToLower(params.Convert):        (*decimal2.View)(totalFiatBalance),
 			},
 		}

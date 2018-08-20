@@ -26,6 +26,11 @@ func (s *Rate) Convert(amount *decimal.Big) *decimal.Big {
 	return new(decimal.Big).Mul(amount, (*decimal.Big)(s))
 }
 
+// ReverseConvert performs reverse conversion
+func (s *Rate) ReverseConvert(amount *decimal.Big) *decimal.Big {
+	return new(decimal.Big).Quo(amount, (*decimal.Big)(s))
+}
+
 // MultiRate holds rates for multiple currencies
 type MultiRate map[string]Rate
 

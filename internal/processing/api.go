@@ -17,7 +17,13 @@ import (
 
 var (
 	// ErrTxAmountToBig returned when tx exceed amount threshold
-	ErrTxAmountToBig = errors.New("processing: tx is exceed amount threshold")
+	ErrTxAmountToBig = errors.New("processing: tx is exceed maximum amount threshold")
+
+	// ErrInvalidWalletBalance returned when wallet balance exceed general balance
+	ErrInvalidWalletBalance = errors.New("processing: wallet balance exceed general balance")
+
+	// ErrSelfTxForbidden returned when self tx detected
+	ErrSelfTxForbidden = errors.New("processing: self-tx forbidden")
 
 	// ErrInsufficientFunds anyone knows what this error means.
 	ErrInsufficientFunds = errors.New("processing: insufficient funds")
@@ -164,7 +170,7 @@ func (api *Api) SendInternal(
 		trace.LogError(span, err)
 	} else if validationErrs != nil {
 		// don't report as error
-		span.LogKV("validation_errs", validationErrs, "message", "validation errs occurred")
+		span.LogKV("validation_errs", validationErrs, "message", "validation errs occurs")
 		err = validationErrs
 	}
 	return
@@ -230,14 +236,6 @@ func (api *Api) GetTxsesSum(ctx context.Context, wallet *queries.Wallet) (sum *d
 	span.LogKV("sum", sum)
 	return
 }
-
-const selectWalletDstTxs = `select txs.*
-from txs
-inner join wallets on txs.from_wallet_id = wallets.id
-where
-    txs.to_phone = $1 and
-    wallets.coin_id = $2 and
-    txs.status_id = (select id from tx_statuses where name = $3)`
 
 // NotifyUserCreatesWallet implements IApi interface
 func (api *Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wallet) (err error) {

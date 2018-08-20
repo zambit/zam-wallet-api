@@ -211,9 +211,27 @@ func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int6
 	if err != nil {
 		return
 	}
+
+	// gather validation errors
+	var validationErrs error
 	// coerce recipient phone number
 	toUserPhone, err = coercePhoneNumber(toUserPhone)
 	if err != nil {
+		validationErrs = merrors.Append(validationErrs, err)
+	}
+
+	// check amount
+	if amount.Sign() <= 0 {
+		validationErrs = merrors.Append(validationErrs, errs.ErrNonPositiveAmount)
+	}
+
+	// forbid self transactions
+	if userPhone == toUserPhone {
+		validationErrs = merrors.Append(validationErrs, errs.ErrSelfTxForbidden)
+	}
+
+	if validationErrs != nil {
+		err = validationErrs
 		return
 	}
 

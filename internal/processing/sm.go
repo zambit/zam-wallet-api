@@ -152,6 +152,14 @@ func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState st
 	coinName := tx.FromWallet.Coin.ShortName
 	amount := tx.Amount.V
 
+	// forbid self transactions
+	switch {
+	case tx.ToWalletID != nil && tx.FromWalletID == *tx.ToWalletID:
+		validateErrs = merrors.Append(validateErrs, ErrSelfTxForbidden)
+	case tx.ToPhone != nil && tx.FromWallet.UserPhone == *tx.ToPhone:
+		validateErrs = merrors.Append(validateErrs, ErrSelfTxForbidden)
+	}
+
 	// query wallet balance, tx amount should not exceed the value we can ensure, return amount to big err in such case
 	generalBalance, err := res.BalanceHelper.AccountBalanceCtx(ctx, coinName)
 	if err != nil {
@@ -163,13 +171,18 @@ func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState st
 	}
 
 	// tx amount should no exceed total wallet balance, return insufficient funds in such case
-	totalBalance, err := res.BalanceHelper.TotalWalletBalanceCtx(ctx, tx.FromWallet)
+	walletTotalBalance, err := res.BalanceHelper.TotalWalletBalanceCtx(ctx, tx.FromWallet)
 	if err != nil {
 		return
 	}
-	span.LogKV("wallet_total_balance", totalBalance)
-	if totalBalance.Cmp(amount) < 0 {
+	span.LogKV("wallet_total_balance", walletTotalBalance)
+	if walletTotalBalance.Cmp(amount) < 0 {
 		validateErrs = merrors.Append(validateErrs, ErrInsufficientFunds)
+	}
+
+	// wallet total balance should not exceed general balance
+	if walletTotalBalance.Cmp(generalBalance) > 0 {
+		validateErrs = merrors.Append(validateErrs, ErrInvalidWalletBalance)
 	}
 
 	if validateErrs != nil {

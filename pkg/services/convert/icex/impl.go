@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"git.zam.io/wallet-backend/common/pkg/validations"
 	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
-	"github.com/ericlagergren/decimal"
 	"github.com/go-playground/validator"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
@@ -14,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"github.com/ericlagergren/decimal"
 )
 
 // static coin name mapping
@@ -89,21 +89,21 @@ type CryptoCurrency struct {
 }
 
 // New coin converter which uses icex.ch service, requires icex host parameter.
-func New(icexHost string) convert.ICryptoCurrency {
+func New(icexHost string) (convert.ICryptoCurrency, error) {
 	if icexHost == "" {
-		panic(fmt.Errorf("icex_converter: icex host parameter is required"))
+		return nil, fmt.Errorf("icex_converter: icex host parameter is required")
 	} else {
 		fullEndpoint := icexHost + coinsEndpoint
 		_, err := url.Parse(fullEndpoint)
 		if err != nil {
-			panic(errors.Wrapf(
+			return nil, errors.Wrapf(
 				err,
 				"icex_converter: icex host parameter seems to be invalid: err on parse url 'host+/api/coins' (%s)",
 				fullEndpoint,
-			))
+			)
 		}
 	}
-	return &CryptoCurrency{icexHost: icexHost}
+	return &CryptoCurrency{icexHost: icexHost}, nil
 }
 
 // ToFiat implements ICryptoCurrency, uses opentracing to trace requests
@@ -136,7 +136,7 @@ func (converter *CryptoCurrency) GetMultiRate(
 	dstCurrencyName string,
 ) (mr convert.MultiRate, err error) {
 	if len(coinNames) == 0 {
-		err = errors.New("icex_converter: at least two coins in the list required")
+		err = errors.New("icex_converter: at least one coin in the list required")
 		return
 	}
 
@@ -210,15 +210,11 @@ func (converter *CryptoCurrency) getRates(ctx context.Context, coins []string, d
 
 	endpointUrl := u.String()
 	span.LogKV("icex_endpoint_url", endpointUrl)
-	req, err := http.NewRequest("GET", endpointUrl, nil)
-	if err != nil {
-		err = errors.Wrap(err, "icex_convert: icex host unavailable")
-		return
-	}
 
+	req, _ := http.NewRequest("GET", endpointUrl, nil)
 	resp, err := converter.client.Do(req.WithContext(ctx))
 	if err != nil {
-		err = convert.ErrCryptoCurrencyName
+		err = errors.Wrap(err, "icex_convert: icex host unavailable")
 		return
 	}
 	// wrong response means service unavailable

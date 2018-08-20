@@ -3,15 +3,16 @@ package txs
 import (
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 
+	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
-	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
+	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/ericlagergren/decimal"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
-	)
+)
 
 var (
 	errUserMiddlewareMissing = base.ErrorView{
@@ -22,7 +23,10 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "insufficient funds",
 	}
-	errNoSuchWallet = base.NewFieldErr("body", "wallet_id", "no such wallet")
+	errWrongTxAmount  = base.NewFieldErr("body", "amount", "must be greater then zero")
+	errTxAmountToBig  = base.NewFieldErr("body", "amount", "such a great value can not be accepted")
+	errNoSuchWallet   = base.NewFieldErr("body", "wallet_id", "no such wallet")
+	errRecipientIsYou = base.NewFieldErr("body", "recipient", "you can't send amount to your self")
 )
 
 // SendFactory
@@ -53,11 +57,7 @@ func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
 		// try send money
 		tx, err := walletApi.SendToPhone(ctx, userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))
 		if err != nil {
-			if err == errs.ErrNoSuchWallet {
-				err = errNoSuchWallet
-			} else if err == processing.ErrInsufficientFunds {
-				err = errInsufficientFunds
-			}
+			err = coerceProcessingErrs(err)
 			return
 		}
 
@@ -71,6 +71,34 @@ func getUserPhone(c *gin.Context) (userPhone string, err error) {
 	userPhone, presented := middlewares.GetUserPhoneFromContext(c)
 	if !presented {
 		err = errUserMiddlewareMissing
+	}
+	return
+}
+
+func coerceProcessingErrs(err error) error {
+	if errors, ok := err.(merrors.Errors); ok {
+		for i, e := range errors {
+			errors[i] = coerceErr(e)
+		}
+		return errors
+	}
+	return coerceErr(err)
+}
+
+func coerceErr(e error) (newE error) {
+	switch e {
+	case errs.ErrNoSuchWallet:
+		newE = errNoSuchWallet
+	case processing.ErrInsufficientFunds:
+		newE = errInsufficientFunds
+	case errs.ErrNonPositiveAmount:
+		newE = errWrongTxAmount
+	case errs.ErrSelfTxForbidden:
+		newE = errRecipientIsYou
+	case processing.ErrTxAmountToBig:
+		newE = errTxAmountToBig
+	default:
+		newE = e
 	}
 	return
 }

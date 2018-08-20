@@ -7,17 +7,5 @@ import (
 
 // CryptoCurrency create icex coin converter with default host
 func CoinConverter() (c convert.ICryptoCurrency, err error) {
-	defer func() {
-		r := recover()
-		if r != nil {
-			if e, ok := r.(error); ok {
-				err = e
-			} else {
-				panic(r)
-			}
-		}
-	}()
-
-	c = icex.New("https://api.icex.ch")
-	return
+	return icex.New("https://api.icex.ch")
 }
