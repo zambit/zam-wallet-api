@@ -5,7 +5,6 @@ import (
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
-	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
@@ -13,7 +12,6 @@ import (
 )
 
 type smResources struct {
-	Coordinator        nodes.ICoordinator
 	BalanceHelper      helpers.IBalance
 	TxEventNotificator isc.ITxsEventNotificator
 }

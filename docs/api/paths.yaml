@@ -140,7 +140,14 @@
         description: Pending transaction created
         schema:
           $ref: "./index.yaml#/definitions/SendTransactionResponse"
-
+      default:
+        description: In case of any error
+        schema:
+          $ref: "./index.yaml#/definitions/Errors"
+        examples:
+          application/json: |
+            {"test": 1}
+          
 /user/me/txs/{tx_id}:
   parameters:
     - in: path

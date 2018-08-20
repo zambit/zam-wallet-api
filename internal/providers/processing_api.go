@@ -18,7 +18,7 @@ func ProcessingApi(
 	txNotificator isc.ITxsEventNotificator,
 ) (processing.IApi, helpers.IBalance) {
 	b := balance.New(coordinator, nil)
-	api := processing.New(db, coordinator, b, txNotificator)
+	api := processing.New(db, b, txNotificator)
 	b.ProcessingApi = api
 	return api, b
 }

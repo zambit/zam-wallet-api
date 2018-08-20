@@ -6,7 +6,6 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/db"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
-	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/ericlagergren/decimal"
@@ -76,7 +75,6 @@ type IApi interface {
 // Api is IApi implementation
 type Api struct {
 	database      *gorm.DB
-	coordinator   nodes.ICoordinator
 	balanceHelper helpers.IBalance
 	notificator   isc.ITxsEventNotificator
 }
@@ -84,13 +82,11 @@ type Api struct {
 // New
 func New(
 	db *gorm.DB,
-	coordinator nodes.ICoordinator,
 	balanceHelper helpers.IBalance,
 	notificator isc.ITxsEventNotificator,
 ) IApi {
 	return &Api{
 		database:      db,
-		coordinator:   coordinator,
 		balanceHelper: balanceHelper,
 		notificator:   notificator,
 	}
@@ -159,7 +155,6 @@ func (api *Api) SendInternal(
 
 		// preform steps
 		newTx, validationErrs, err = StepTx(ctx, dbTx, newTx, &smResources{
-			Coordinator:        api.coordinator,
 			BalanceHelper:      api.balanceHelper,
 			TxEventNotificator: api.notificator,
 		})
@@ -287,7 +282,6 @@ func (api *Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wal
 		for _, tx := range txsToUpdate {
 			// ignore validation errs, TODO should notify user
 			_, _, err = StepTx(ctx, dbTx, tx, &smResources{
-				Coordinator:        api.coordinator,
 				BalanceHelper:      api.balanceHelper,
 				TxEventNotificator: api.notificator,
 			})
