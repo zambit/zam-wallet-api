@@ -4,6 +4,12 @@ import (
 	"git.zam.io/wallet-backend/web-api/config/server"
 )
 
+// FrontendScheme hold configuration values which relates to front-end of this application
+type FrontendScheme struct {
+	// RootURL is root url of fornt-end application, used in different places by application
+	RootURL string
+}
+
 // Scheme web-server params
 type Scheme struct {
 	// Host to listen on such address, accept both ip4 and ip6 addresses
@@ -29,4 +35,7 @@ type Scheme struct {
 
 	// InternalAccessToken token which is required to access internal endpoints
 	InternalAccessToken string
+
+	// Frontend configuration
+	Frontend FrontendScheme
 }

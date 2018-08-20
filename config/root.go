@@ -38,6 +38,7 @@ func Init(v *viper.Viper) {
 	v.SetDefault("Server.Host", "localhost")
 	v.SetDefault("Server.Port", 9998)
 	v.SetDefault("Server.Storage.URI", "mem://")
+	v.SetDefault("Server.Frontend.RootURL", "https://zam.io/")
 
 	v.SetDefault("JaegerConfig.ServiceName", "wallet-api")
 	v.SetDefault("JaegerConfig.Reporter.LogSpans", true)

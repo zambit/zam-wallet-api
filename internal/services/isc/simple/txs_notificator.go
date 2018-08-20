@@ -1,9 +1,9 @@
 package simple
 
 import (
-	"fmt"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
 	"git.zam.io/wallet-backend/web-api/pkg/services/notifications"
+	"github.com/chonla/format"
 	"github.com/pkg/errors"
 	"strings"
 )
@@ -12,11 +12,12 @@ import (
 // them. This implementation doesn't actually sends broker messages.
 type txsEventNotificator struct {
 	transport notifications.ITransport
+	appUrl    string
 }
 
 // New simple ITxEventsNotificator implementation which uses specified message transport
-func New(transport notifications.ITransport) isc.ITxsEventNotificator {
-	return &txsEventNotificator{transport}
+func New(transport notifications.ITransport, applicationUrl string) isc.ITxsEventNotificator {
+	return &txsEventNotificator{transport, applicationUrl}
 }
 
 // Processed implements ITxEventNotificator
@@ -37,7 +38,7 @@ func (n *txsEventNotificator) AwaitRecipient(payload isc.TxEventPayload) error {
 		return errors.New("simple txs event notificator: empty ToPhone field")
 	}
 	if payload.Coin == "" {
-		return errors.New("simple txs event notificator: empty ToCoin field")
+		return errors.New("simple txs event notificator: empty Coin field")
 	}
 	if payload.FromPhone == "" {
 		return errors.New("simple txs event notificator: empty FromPhone field")
@@ -48,15 +49,16 @@ func (n *txsEventNotificator) AwaitRecipient(payload isc.TxEventPayload) error {
 
 	return n.transport.Send(
 		payload.ToPhone,
-		fmt.Sprintf(
-			`%s
-
-отправил вам
-
-%s %s
-
-. Для их получения зарегестрируйтесь на http://wallet-test.zam.io в течении 72х часов`,
-			payload.FromPhone, payload.Amount.String(), strings.ToUpper(payload.Coin),
+		format.Sprintf(
+			notifMessageTemplate,
+			map[string]interface{}{
+				"amount":       payload.Amount,
+				"coin":         strings.ToUpper(payload.Coin),
+				"phone_number": payload.FromPhone,
+				"app_url":      n.appUrl,
+			},
 		),
 	)
 }
+
+const notifMessageTemplate = `Hi from Zamzam Bank! You got %<amount>s %<coin>s from %<phone_number>s, in order to receive them, go through the verification of your phone at %<app_url>s`

@@ -14,6 +14,9 @@ server:
     notificator:
         url: '$NOTIFICATIONS_URL'
     InternalAccessToken: '$ISC_ACCESS_TOKEN'
+
+    Frontend:
+        RootURL: '$FRONTEND_URL'
 isc:
     brokeruri: '$BROKER_URI'
     statsenabled: false

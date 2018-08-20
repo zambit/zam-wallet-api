@@ -27,3 +27,4 @@ import:
 - package: github.com/jmoiron/sqlx
 - package: github.com/ericlagergren/decimal
   version: v3.2
+- package: github.com/chonla/format
