@@ -1,18 +1,18 @@
 package wallets
 
 import (
+	"context"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
-	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
+	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	ot "github.com/opentracing/opentracing-go"
 	"net/http"
 	"strings"
-	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
-	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
-	"context"
 )
 
 var (
@@ -167,7 +167,7 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 		}
 
 		// perform convertation if this argument presented for all wallets
-		var additionalRates AdditionalRates
+		additionalRates := AdditionalRates{Currency: params.Convert}
 		if params.Convert != "" && len(wts) > 0 {
 			nonZeroWts := filterNonZeroWallets(wts)
 			trace.InsideSpanE(ctx, "converting_balances_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
