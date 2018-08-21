@@ -36,7 +36,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 
 		span.LogKV("user_phone", params.UserPhone)
 
-		wtsCount, totalFiatBalance, totalBalanceInDefCurr := 0, new(decimal.Big), (*decimal.Big)(nil)
+		wtsCount, totalFiatBalance, totalBalanceInDefCurr := 0, new(decimal.Big), new(decimal.Big)
 		err = trace.InsideSpanE(
 			ctx,
 			"querying_user_wallets_balance",
@@ -55,6 +55,10 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 
 				// calculate total fiat balance
 				coinNames := nonZeroWalletsCoins(wts)
+				if len(coinNames) == 0 {
+					return nil
+				}
+
 				addDefaultCurrencyCoin := true
 				for _, name := range coinNames {
 					if name == defaultCryptoCurrency {
