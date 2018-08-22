@@ -28,3 +28,6 @@ import:
 - package: github.com/ericlagergren/decimal
   version: v3.2
 - package: github.com/chonla/format
+- package: github.com/dghubble/sling
+  version: v1.1.0
+- package: github.com/google/go-querystring

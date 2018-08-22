@@ -45,6 +45,8 @@ func (mr MultiRate) CurrencyRate(currency string) *Rate {
 }
 
 // ICryptoCurrency uses external real-time service to convert some coin amount into equivalent of fiat value
+//
+// All methods, which accept context, also supports deadlines and cancel channels
 type ICryptoCurrency interface {
 	// GetRate returns rate which should be used to convert from coin specified by short name to fiat currency
 	// specified by short name. If coin name is invalid, returns ErrCryptoCurrencyName, if currency name is invalid,
