@@ -111,25 +111,22 @@ func GetFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Handle
 			return
 		}
 
-		// perform convertation if this argument presented
-		var additionalRate common.AdditionalRate
-		if params.Convert != "" {
-			params.Convert = strings.ToLower(params.Convert)
-
-			trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
-				span.LogKV("convert_to", params.Convert)
-				span.LogKV("convert_from", wallet.Coin.ShortName)
-
-				rate, err := convert.GetRateDefaultFiat(
-					converter, ctx, wallet.Coin.ShortName, params.Convert, common.DefaultFiatCurrency,
-				)
-				if err != nil {
-					return err
-				}
-				additionalRate = common.AdditionalRate{Rate: rate, FiatCurrency: params.Convert}
-				return nil
-			})
+		// coerce convert param
+		if params.Convert == "" {
+			params.Convert = common.DefaultFiatCurrency
 		}
+		additionalRate := common.AdditionalRate{FiatCurrency: params.Convert}
+
+		trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
+			span.LogKV("convert_to", params.Convert)
+			span.LogKV("convert_from", wallet.Coin.ShortName)
+
+			var err error
+			additionalRate.Rate, err = convert.GetRateDefaultFiat(
+				converter, ctx, wallet.Coin.ShortName, params.Convert, common.DefaultFiatCurrency,
+			)
+			return err
+		})
 
 		// prepare response body
 		resp = ResponseFromWallet(wallet, additionalRate)
@@ -165,14 +162,13 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 			return
 		}
 
+		// coerce convert param
+		if params.Convert == "" {
+			params.Convert = common.DefaultFiatCurrency
+		}
 		// perform convertation if this argument presented for all wallets
 		additionalRates := common.AdditionalRates{FiatCurrency: params.Convert}
 		if len(wts) > 0 {
-			if params.Convert == "" {
-				params.Convert = common.DefaultFiatCurrency
-			}
-			params.Convert = strings.ToLower(params.Convert)
-
 			trace.InsideSpanE(ctx, "converting_balances_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
 				nonZeroWts := filterNonZeroWallets(wts)
 				if len(nonZeroWts) == 0 {
@@ -186,14 +182,11 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 				span.LogKV("convert_to", params.Convert)
 				span.LogKV("convert_from", strings.Join(coinsList, ","))
 
-				rates, err := convert.GetMultiRateDefaultFiat(
+				var err error
+				additionalRates.MultiRate, err = convert.GetMultiRateDefaultFiat(
 					converter, ctx, coinsList, params.Convert, common.DefaultFiatCurrency,
 				)
-				if err != nil {
-					return err
-				}
-				additionalRates = common.AdditionalRates{MultiRate: rates, FiatCurrency: params.Convert}
-				return nil
+				return err
 			})
 		}
 

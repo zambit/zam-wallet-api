@@ -18,11 +18,10 @@ func getRateForTx(
 	converter convert.ICryptoCurrency,
 ) (bRate common.AdditionalRate, err error) {
 	// perform convertation if this argument presented
-	var additionalRate common.AdditionalRate
 	if dstFiatCurrency == "" {
 		dstFiatCurrency = common.DefaultFiatCurrency
 	}
-	dstFiatCurrency = strings.ToLower(dstFiatCurrency)
+	bRate = common.AdditionalRate{FiatCurrency: dstFiatCurrency}
 
 	err = trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
 		span.LogKV("convert_to", dstFiatCurrency)
@@ -35,7 +34,7 @@ func getRateForTx(
 		if err != nil {
 			return err
 		}
-		additionalRate = common.AdditionalRate{Rate: rate, FiatCurrency: dstFiatCurrency}
+		bRate.Rate = rate
 		return nil
 	})
 	return
@@ -48,15 +47,14 @@ func getRatesForTxs(
 	dstFiatCurrency string,
 	converter convert.ICryptoCurrency,
 ) (bRates common.AdditionalRates, err error) {
+	// coerce fiat currency name
+	if dstFiatCurrency == "" {
+		dstFiatCurrency = common.DefaultFiatCurrency
+	}
+
 	// perform convertation if this argument presented for all txs
 	bRates = common.AdditionalRates{FiatCurrency: dstFiatCurrency}
 	if len(txs) > 0 {
-		if dstFiatCurrency == "" {
-			dstFiatCurrency = common.DefaultFiatCurrency
-		}
-
-		dstFiatCurrency = strings.ToLower(dstFiatCurrency)
-
 		err = trace.InsideSpanE(
 			ctx, "converting_balances_to_fiat_currency",
 			func(ctx context.Context, span ot.Span) error {

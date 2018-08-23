@@ -36,7 +36,7 @@ func (api *Api) Get(ctx context.Context, id int64, restrictUserPhone ...string) 
 
 		// query tx
 		tx = new(processing.Tx)
-		err := q.First(tx).Error
+		err := addTxPreloads(q).First(tx).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				err = ErrNoSuchTx

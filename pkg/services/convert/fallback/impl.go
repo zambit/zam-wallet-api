@@ -1,13 +1,13 @@
 package fallback
 
 import (
-	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 	"context"
-	"time"
-	"net"
-	"github.com/opentracing/opentracing-go"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
+	"net"
+	"time"
 )
 
 // CryproCurrency implements converter which uses first converter, if timeout occurs it tries fallback converter
@@ -18,7 +18,7 @@ type CryproCurrency struct {
 }
 
 // New creates new converter with callback and timeout
-func New(main, fallback convert.ICryptoCurrency, timeout  time.Duration) convert.ICryptoCurrency {
+func New(main, fallback convert.ICryptoCurrency, timeout time.Duration) convert.ICryptoCurrency {
 	return &CryproCurrency{main, fallback, timeout}
 }
 
@@ -60,8 +60,10 @@ func (fc *CryproCurrency) getFallbackRate(
 		return err
 	})
 	if err != nil {
-		// any net error will cause fallback to be used
-		if _, ok := errors.Cause(err).(net.Error); !ok {
+		// there a lot of wrappers, so try to extract causers
+		err = errors.Cause(err)
+		// only unavailable and net error cause fallback to be used
+		if _, ok := err.(net.Error); !ok && err != convert.ErrUnavailable {
 			return
 		}
 	} else {
@@ -92,4 +94,3 @@ func refreshTimeout(ctx context.Context, timeout time.Duration) context.Context 
 	ctx, _ = context.WithTimeout(ctx, timeout)
 	return ctx
 }
-

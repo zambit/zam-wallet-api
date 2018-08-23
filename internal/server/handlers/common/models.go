@@ -22,7 +22,7 @@ var zeroDecimalView = (*decimal.View)(new(bdecimal.Big).SetFloat64(0))
 // RepresentBalance represent given balance in specified currencies
 func (ar *AdditionalRate) RepresentBalance(balance *bdecimal.Big) MultiCurrencyBalance {
 	balances := map[string]*decimal.View{
-		ar.CoinCurrency: (*decimal.View)(balance),
+		strings.ToLower(ar.CoinCurrency): (*decimal.View)(balance),
 	}
 	if ar.FiatCurrency != "" {
 		var value *decimal.View
@@ -31,7 +31,7 @@ func (ar *AdditionalRate) RepresentBalance(balance *bdecimal.Big) MultiCurrencyB
 		} else {
 			value = zeroDecimalView
 		}
-		balances[ar.FiatCurrency] = value
+		balances[strings.ToLower(ar.FiatCurrency)] = value
 	}
 	return balances
 }
@@ -44,10 +44,9 @@ type AdditionalRates struct {
 
 // ForCoinCurrency return rate description for selected currency
 func (ar *AdditionalRates) ForCoinCurrency(coinName string) AdditionalRate {
-	coinName = strings.ToLower(coinName)
 	return AdditionalRate{
 		Rate:         ar.CurrencyRate(coinName),
 		CoinCurrency: coinName,
-		FiatCurrency: ar.FiatCurrency,
+		FiatCurrency: strings.ToLower(ar.FiatCurrency),
 	}
 }
