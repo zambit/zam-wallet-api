@@ -3,6 +3,7 @@ package wallets
 import (
 	"context"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
+	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/common"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
@@ -11,15 +12,10 @@ import (
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	ot "github.com/opentracing/opentracing-go"
-	"net/http"
 	"strings"
 )
 
 var (
-	errUserMiddlewareMissing = base.ErrorView{
-		Code:    http.StatusInternalServerError,
-		Message: "user middleware is missing",
-	}
 	errWalletIDInvalid               = base.NewFieldErr("path", "wallet_id", "wallet id invalid")
 	errWalletIDNotFound              = base.NewFieldErr("path", "wallet_id", "wallet not found")
 	errWalletOfSuchCoinAlreadyExists = base.NewFieldErr("body", "coin", "wallet of such coin already exists")
@@ -71,7 +67,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 
 		// prepare response body
 		code = 201
-		resp = ResponseFromWallet(wallet, AdditionalRate{})
+		resp = ResponseFromWallet(wallet, common.AdditionalRate{})
 
 		return
 	}
@@ -100,7 +96,7 @@ func GetFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Handle
 		span.LogKV("user_phone", userPhone)
 
 		// extract query params and ignore errors
-		params := DefaultGetRequest()
+		params := GetRequest{}
 		c.BindQuery(&params)
 
 		// perform request
@@ -116,17 +112,21 @@ func GetFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Handle
 		}
 
 		// perform convertation if this argument presented
-		var additionalRate AdditionalRate
+		var additionalRate common.AdditionalRate
 		if params.Convert != "" {
+			params.Convert = strings.ToLower(params.Convert)
+
 			trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
 				span.LogKV("convert_to", params.Convert)
 				span.LogKV("convert_from", wallet.Coin.ShortName)
 
-				rate, err := converter.GetRate(ctx, wallet.Coin.ShortName, params.Convert)
+				rate, err := convert.GetRateDefaultFiat(
+					converter, ctx, wallet.Coin.ShortName, params.Convert, common.DefaultFiatCurrency,
+				)
 				if err != nil {
 					return err
 				}
-				additionalRate = AdditionalRate{Rate: rate, Currency: params.Convert}
+				additionalRate = common.AdditionalRate{Rate: rate, FiatCurrency: params.Convert}
 				return nil
 			})
 		}
@@ -143,10 +143,9 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
 
-		params := DefaultGetAllRequest()
+		params := GetAllRequest{Count: 10}
 		// ignore error due to invalid query params just ignored
 		c.BindQuery(&params)
-		span.LogKV("params", params)
 
 		// parse cursor
 		fromID, _ := ParseWalletIDView(params.Cursor)
@@ -167,23 +166,33 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 		}
 
 		// perform convertation if this argument presented for all wallets
-		additionalRates := AdditionalRates{Currency: params.Convert}
-		if params.Convert != "" && len(wts) > 0 {
-			nonZeroWts := filterNonZeroWallets(wts)
+		additionalRates := common.AdditionalRates{FiatCurrency: params.Convert}
+		if len(wts) > 0 {
+			if params.Convert == "" {
+				params.Convert = common.DefaultFiatCurrency
+			}
+			params.Convert = strings.ToLower(params.Convert)
+
 			trace.InsideSpanE(ctx, "converting_balances_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
+				nonZeroWts := filterNonZeroWallets(wts)
+				if len(nonZeroWts) == 0 {
+					return nil
+				}
 				coinsList := make([]string, len(nonZeroWts))
 				for i, w := range nonZeroWts {
 					coinsList[i] = w.Coin.ShortName
 				}
 
 				span.LogKV("convert_to", params.Convert)
-				span.LogKV("convert_from", strings.Join(coinsList, ", "))
+				span.LogKV("convert_from", strings.Join(coinsList, ","))
 
-				rates, err := converter.GetMultiRate(ctx, coinsList, params.Convert)
+				rates, err := convert.GetMultiRateDefaultFiat(
+					converter, ctx, coinsList, params.Convert, common.DefaultFiatCurrency,
+				)
 				if err != nil {
 					return err
 				}
-				additionalRates = AdditionalRates{MultiRate: rates, Currency: params.Convert}
+				additionalRates = common.AdditionalRates{MultiRate: rates, FiatCurrency: params.Convert}
 				return nil
 			})
 		}

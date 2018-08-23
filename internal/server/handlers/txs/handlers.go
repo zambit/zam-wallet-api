@@ -9,6 +9,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/wallet-api/pkg/server/middlewares"
+	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/ericlagergren/decimal"
@@ -43,7 +44,7 @@ var (
 )
 
 // SendFactory
-func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
+func SendFactory(walletApi *wallets.Api, converter convert.ICryptoCurrency) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
@@ -53,6 +54,9 @@ func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
 		if err != nil {
 			return
 		}
+		// bind query params ignore error
+		queryParams := ConvertParams{}
+		c.ShouldBindQuery(&queryParams)
 
 		span.LogKV(
 			"wallet_id", params.WalletID,
@@ -79,19 +83,24 @@ func SendFactory(walletApi *wallets.Api) base.HandlerFunc {
 			return
 		}
 
+		// query rates ignore error
+		rates, _ := getRateForTx(ctx, tx, queryParams.Convert, converter)
+
 		// render response converting db format into api format
-		resp = SingleResponse{Transaction: ToView(tx, userPhone)}
+		resp = SingleResponse{Transaction: ToView(tx, userPhone, rates)}
 		return
 	}
 }
 
-const defaultTxCountValue = 20
-
 // GetFactory creates get user tx by id handler, requires tx_id param in request path
-func GetFactory(txsApi txs.IApi) base.HandlerFunc {
+func GetFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
+
+		// bind query params ignore error
+		params := ConvertParams{}
+		c.ShouldBindQuery(&params)
 
 		// parse wallet id path param
 		txID, txIDValid := FromIdView(c.Param("tx_id"))
@@ -122,14 +131,19 @@ func GetFactory(txsApi txs.IApi) base.HandlerFunc {
 			return
 		}
 
+		// query rates ignore error
+		rates, _ := getRateForTx(ctx, tx, params.Convert, converter)
+
 		// prepare response body
-		resp = SingleResponse{Transaction: ToView(tx, userPhone)}
+		resp = SingleResponse{Transaction: ToView(tx, userPhone, rates)}
 		return
 	}
 }
 
+const defaultTxCountValue = 20
+
 // GetAllFactory creates get all user txs request handler
-func GetAllFactory(txsApi txs.IApi) base.HandlerFunc {
+func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.HandlerFunc {
 	return func(c *gin.Context) (resp interface{}, code int, err error) {
 		span, ctx := trace.GetSpanWithCtx(c)
 		defer span.Finish()
@@ -149,71 +163,9 @@ func GetAllFactory(txsApi txs.IApi) base.HandlerFunc {
 		span.LogKV("user_phone", userPhone)
 
 		// build filters by query params
-		filters := make([]txs.Filterer, 0, 2)
-		// apply user phone filter
-		filters = append(filters, txs.UserFilter(userPhone))
-		// apply coin filter
-		if params.Coin != nil {
-			filters = append(filters, txs.CoinFilter(*params.Coin))
-		}
-		// apply status filter
-		if params.Status != nil {
-			filters = append(filters, txs.StatusFilter(*params.Status))
-		}
-		// apply wallet id filter
-		if params.WalletID != nil {
-			walletID, valid := walletshandlers.ParseWalletIDView(*params.WalletID)
-			if !valid {
-				err = errInvalidWalletID
-				return
-			}
-			filters = append(filters, txs.WalletIDFilter(walletID))
-		}
-		// apply recipient filter
-		if params.Recipient != nil {
-			filters = append(filters, txs.RecipientPhoneFilter(*params.Recipient))
-		}
-		// apply time range filters
-		if params.FromTime != nil || params.UntilTime != nil {
-			var (
-				from *time.Time
-				to   *time.Time
-			)
-			// TODO find gin query bind workaround for unix timestamps
-			if params.FromTime != nil {
-				fromTs, pErr := strconv.ParseInt(*params.FromTime, 10, 64)
-				if pErr == nil {
-					t := time.Unix(fromTs, 0).UTC()
-					from = &t
-				}
-			}
-			if params.UntilTime != nil {
-				toTs, pErr := strconv.ParseInt(*params.UntilTime, 10, 64)
-				if pErr == nil {
-					t := time.Unix(toTs, 0).UTC()
-					to = &t
-				}
-			}
-			filters = append(filters, txs.DateRangeFilter{FromTime: from, UntilTime: to})
-		}
-		// apply pagination
-		if params.Count != nil || params.Page != nil {
-			pager := txs.Pager{}
-			if params.Count != nil {
-				pager.Count = *params.Count
-			} else {
-				// by default limit response items
-				pager.Count = defaultTxCountValue
-			}
-			if params.Page != nil {
-				page, valid := FromIdView(*params.Page)
-				if !valid {
-					err = errInvalidPage
-					return
-				}
-				pager.FromID = page
-			}
-			filters = append(filters, &pager)
+		filters, err := generateFilters(params, userPhone)
+		if err != nil {
+			return
 		}
 
 		var (
@@ -240,9 +192,12 @@ func GetAllFactory(txsApi txs.IApi) base.HandlerFunc {
 			return
 		}
 
+		// get rates ignore error
+		rates, _ := getRatesForTxs(ctx, allTxs, params.Convert, converter)
+
 		// prepare response body
 		mr := MultipleResponse{
-			Transactions: ToAllView(allTxs, userPhone),
+			Transactions: ToAllView(allTxs, userPhone, rates),
 			Count:        count,
 		}
 		if hasNext && len(allTxs) > 0 {
@@ -256,14 +211,14 @@ func GetAllFactory(txsApi txs.IApi) base.HandlerFunc {
 func coerceProcessingErrs(err error) error {
 	if errors, ok := err.(merrors.Errors); ok {
 		for i, e := range errors {
-			errors[i] = coerceErr(e)
+			errors[i] = coerceProcessingErr(e)
 		}
 		return errors
 	}
-	return coerceErr(err)
+	return coerceProcessingErr(err)
 }
 
-func coerceErr(e error) (newE error) {
+func coerceProcessingErr(e error) (newE error) {
 	switch e {
 	case errs.ErrNoSuchWallet:
 		newE = errNoSuchWallet
@@ -277,6 +232,77 @@ func coerceErr(e error) (newE error) {
 		newE = errTxAmountToBig
 	default:
 		newE = e
+	}
+	return
+}
+
+// generates txs filters params for specified user
+func generateFilters(params GetAllRequest, userPhone string) (filters []txs.Filterer, err error) {
+	filters = make([]txs.Filterer, 0, 2)
+	// apply user phone filter
+	filters = append(filters, txs.UserFilter(userPhone))
+	// apply coin filter
+	if params.Coin != nil {
+		filters = append(filters, txs.CoinFilter(*params.Coin))
+	}
+	// apply status filter
+	if params.Status != nil {
+		filters = append(filters, txs.StatusFilter(*params.Status))
+	}
+	// apply wallet id filter
+	if params.WalletID != nil {
+		walletID, valid := walletshandlers.ParseWalletIDView(*params.WalletID)
+		if !valid {
+			err = errInvalidWalletID
+			return
+		}
+		filters = append(filters, txs.WalletIDFilter(walletID))
+	}
+	// apply recipient filter
+	if params.Recipient != nil {
+		filters = append(filters, txs.RecipientPhoneFilter(*params.Recipient))
+	}
+	// apply time range filters
+	if params.FromTime != nil || params.UntilTime != nil {
+		var (
+			from *time.Time
+			to   *time.Time
+		)
+		// TODO find gin query bind workaround for unix timestamps
+		if params.FromTime != nil {
+			fromTs, pErr := strconv.ParseInt(*params.FromTime, 10, 64)
+			if pErr == nil {
+				t := time.Unix(fromTs, 0).UTC()
+				from = &t
+			}
+		}
+		if params.UntilTime != nil {
+			toTs, pErr := strconv.ParseInt(*params.UntilTime, 10, 64)
+			if pErr == nil {
+				t := time.Unix(toTs, 0).UTC()
+				to = &t
+			}
+		}
+		filters = append(filters, txs.DateRangeFilter{FromTime: from, UntilTime: to})
+	}
+	// apply pagination
+	if params.Count != nil || params.Page != nil {
+		pager := txs.Pager{}
+		if params.Count != nil {
+			pager.Count = *params.Count
+		} else {
+			// by default limit response items
+			pager.Count = defaultTxCountValue
+		}
+		if params.Page != nil {
+			page, valid := FromIdView(*params.Page)
+			if !valid {
+				err = errInvalidPage
+				return
+			}
+			pager.FromID = page
+		}
+		filters = append(filters, &pager)
 	}
 	return
 }

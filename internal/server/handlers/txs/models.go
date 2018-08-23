@@ -3,6 +3,7 @@ package txs
 import (
 	"git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
+	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/common"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	"strconv"
 	"strings"
@@ -16,6 +17,11 @@ type SendRequest struct {
 	Amount    *decimal.View `json:"amount" validate:"required"`
 }
 
+// ConvertParams used in send tx request to parse query params
+type ConvertParams struct {
+	Convert string `form:"convert"`
+}
+
 // GetAllRequest get all wallets request query params parser
 type GetAllRequest struct {
 	Coin      *string `form:"coin"`
@@ -26,6 +32,7 @@ type GetAllRequest struct {
 	UntilTime *string `form:"until_time"`
 	Page      *string `form:"page"`
 	Count     *int64  `form:"count"`
+	Convert   string  `form:"convert"`
 }
 
 // UnixTimeView marshales into unix time format
@@ -37,15 +44,15 @@ func (t *UnixTimeView) MarshalJSON() ([]byte, error) {
 
 // View tx api representation
 type View struct {
-	ID        string        `json:"id"`
-	WalletID  string        `json:"wallet_id,omitempty"`
-	Direction string        `json:"direction"`
-	Status    string        `json:"status"`
-	Coin      string        `json:"coin"`
-	Recipient string        `json:"recipient,omitempty"`
-	Sender    string        `json:"sender,omitempty"`
-	Amount    *decimal.View `json:"amount"`
-	CreatedAt UnixTimeView  `json:"created_at"`
+	ID        string                      `json:"id"`
+	WalletID  string                      `json:"wallet_id,omitempty"`
+	Direction string                      `json:"direction"`
+	Status    string                      `json:"status"`
+	Coin      string                      `json:"coin"`
+	Recipient string                      `json:"recipient,omitempty"`
+	Sender    string                      `json:"sender,omitempty"`
+	Amount    common.MultiCurrencyBalance `json:"amount"`
+	CreatedAt UnixTimeView                `json:"created_at"`
 }
 
 // SingleResponse single tx response
@@ -73,7 +80,7 @@ func FromIdView(idView string) (id int64, valid bool) {
 }
 
 // ToView
-func ToView(tx *processing.Tx, userPhone string) *View {
+func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *View {
 	isOutgoing := tx.FromWallet.UserPhone == userPhone
 	// wallet id must be shadowed if tx is incoming
 	var (
@@ -92,25 +99,27 @@ func ToView(tx *processing.Tx, userPhone string) *View {
 		sender = tx.FromWallet.UserPhone
 	}
 
+	coinName := strings.ToLower(tx.FromWallet.Coin.ShortName)
+	rate.CoinCurrency = coinName
 	return &View{
 		ID:        ToIdView(tx.ID),
 		WalletID:  walletID,
 		Direction: map[bool]string{true: "outgoing", false: "incoming"}[isOutgoing],
 		Status:    tx.Status.Name,
-		Coin:      strings.ToLower(tx.FromWallet.Coin.ShortName),
+		Coin:      coinName,
 		Recipient: recipient,
 		Sender:    sender,
-		Amount:    (*decimal.View)(tx.Amount.V),
+		Amount:    rate.RepresentBalance(tx.Amount.V),
 		CreatedAt: UnixTimeView(tx.CreatedAt),
 	}
 }
 
 // ToAllView
-func ToAllView(txs []processing.Tx, userPhone string) []View {
+func ToAllView(txs []processing.Tx, userPhone string, rates common.AdditionalRates) []View {
 	res := make([]View, len(txs))
 	for i, tx := range txs {
 		// ToView return should not escape
-		res[i] = *ToView(&tx, userPhone)
+		res[i] = *ToView(&tx, userPhone, rates.ForCoinCurrency(tx.FromWallet.Coin.ShortName))
 	}
 	return res
 }
