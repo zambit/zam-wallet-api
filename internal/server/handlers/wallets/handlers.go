@@ -49,7 +49,7 @@ func CreateFactory(api *wallets.Api) base.HandlerFunc {
 		}
 
 		// extract user id
-		userPhone, err := getUserPhone(c)
+		userPhone, err := middlewares.GetUserPhoneFromCtxE(c)
 		if err != nil {
 			return
 		}
@@ -85,7 +85,7 @@ func GetFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Handle
 		defer span.Finish()
 
 		// parse wallet id path param
-		walletID, walletIDValid := parseWalletIDView(c.Param("wallet_id"))
+		walletID, walletIDValid := ParseWalletIDView(c.Param("wallet_id"))
 		if !walletIDValid {
 			err = errWalletIDInvalid
 			return
@@ -93,7 +93,7 @@ func GetFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Handle
 		span.LogKV("wallet_id", walletID)
 
 		// extract user id
-		userPhone, err := getUserPhone(c)
+		userPhone, err := middlewares.GetUserPhoneFromCtxE(c)
 		if err != nil {
 			return
 		}
@@ -149,11 +149,11 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 		span.LogKV("params", params)
 
 		// parse cursor
-		fromID, _ := parseWalletIDView(params.Cursor)
+		fromID, _ := ParseWalletIDView(params.Cursor)
 		span.LogKV("from_id", fromID)
 
 		// extract user id
-		userPhone, err := getUserPhone(c)
+		userPhone, err := middlewares.GetUserPhoneFromCtxE(c)
 		if err != nil {
 			return
 		}
@@ -195,15 +195,6 @@ func GetAllFactory(api *wallets.Api, converter convert.ICryptoCurrency) base.Han
 }
 
 // utils
-// getUserPhone extracts user id from context which must be attached by user middleware
-func getUserPhone(c *gin.Context) (userPhone string, err error) {
-	userPhone, presented := middlewares.GetUserPhoneFromContext(c)
-	if !presented {
-		err = errUserMiddlewareMissing
-	}
-	return
-}
-
 func filterNonZeroWallets(wts []wallets.WalletWithBalance) []wallets.WalletWithBalance {
 	nWts := make([]wallets.WalletWithBalance, 0, len(wts))
 	for _, w := range wts {

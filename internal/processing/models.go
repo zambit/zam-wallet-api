@@ -4,6 +4,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"github.com/ericlagergren/decimal/sql/postgres"
 	"gopkg.in/src-d/go-kallax.v1"
+	"time"
 )
 
 // TxStatus
@@ -48,6 +49,8 @@ type Tx struct {
 	ToPhone    *string
 
 	Amount *postgres.Decimal
+
+	CreatedAt time.Time
 
 	StatusID int64
 	Status   *TxStatus `gorm:"foreignkey:StatusID;association_autoupdate:false;association_autocreate:false"`

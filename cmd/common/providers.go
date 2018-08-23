@@ -79,4 +79,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 
 	// provide processing api
 	utils.MustProvide(c, internalproviders.ProcessingApi)
+
+	// provide txs api
+	utils.MustProvide(c, internalproviders.TxsApi)
 }

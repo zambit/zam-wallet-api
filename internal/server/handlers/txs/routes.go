@@ -1,11 +1,12 @@
 package txs
 
 import (
+	"git.zam.io/wallet-backend/wallet-api/internal/txs"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/base"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/dig"
-	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 )
 
 // Dependencies
@@ -17,6 +18,7 @@ type Dependencies struct {
 	UserMiddleware gin.HandlerFunc `name:"user_middleware"`
 
 	WalletsApi *wallets.Api
+	TxsApi     txs.IApi
 }
 
 // Register
@@ -31,6 +33,14 @@ func Register(dependencies Dependencies) error {
 	group.POST(
 		"/txs",
 		base.WrapHandler(SendFactory(dependencies.WalletsApi)),
+	)
+	group.GET(
+		"/txs/:tx_id",
+		base.WrapHandler(GetFactory(dependencies.TxsApi)),
+	)
+	group.GET(
+		"/txs",
+		base.WrapHandler(GetAllFactory(dependencies.TxsApi)),
 	)
 	return nil
 }

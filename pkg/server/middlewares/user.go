@@ -25,9 +25,24 @@ var (
 		Code:    http.StatusInternalServerError,
 		Message: "wrong auth info: cannot obtain user phone",
 	}
+
+	// ErrUserMiddlewareMissing returned from GetUserPhoneFromCtxE to indicate that user middleware is missing
+	ErrUserMiddlewareMissing = base.ErrorView{
+		Code:    http.StatusInternalServerError,
+		Message: "user middleware is missing",
+	}
+
+	// ErrUserMiddlewareMissing returned when some critical errors occurs
+	ErrUserMiddlewareBadBehaviour = base.ErrorView{
+		Code:    http.StatusInternalServerError,
+		Message: "user middleware bad behaviour",
+	}
 )
 
-const contextUserPhoneKey = "user_phone"
+const (
+	contextUserPhoneKey     = "user_phone"
+	contextUserMwAppliedKey = "user_mw_applied"
+)
 
 // ContextAuthUserInfoGetter
 type ContextAuthUserInfoGetter func(c context.Context) (userPhone string, present bool, valid bool)
@@ -67,6 +82,8 @@ func UserMiddlewareFactory(getter ContextAuthUserInfoGetter) base.HandlerFunc {
 
 		// attach user id
 		c.Set(contextUserPhoneKey, userPhone)
+		// attach user middleware applied key
+		c.Set(contextUserMwAppliedKey, true)
 
 		return
 	}
@@ -75,5 +92,19 @@ func UserMiddlewareFactory(getter ContextAuthUserInfoGetter) base.HandlerFunc {
 // GetUserPhoneFromContext get user ID which was previously attached from context
 func GetUserPhoneFromContext(ctx context.Context) (userPhone string, presented bool) {
 	userPhone, presented = ctx.Value(contextUserPhoneKey).(string)
+	return
+}
+
+// GetUserPhoneFromCtxE same as GetUserPhoneFromContext but returns middleware missing error
+func GetUserPhoneFromCtxE(ctx context.Context) (userPhone string, err error) {
+	if ctx.Value(contextUserMwAppliedKey) == nil {
+		err = ErrUserMiddlewareMissing
+		return
+	}
+
+	userPhone, valid := ctx.Value(contextUserPhoneKey).(string)
+	if !valid {
+		err = ErrUserMiddlewareBadBehaviour
+	}
 	return
 }

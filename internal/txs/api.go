@@ -2,11 +2,14 @@ package txs
 
 import (
 	"context"
-	"git.zam.io/wallet-backend/common/pkg/types"
+	"errors"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"github.com/jinzhu/gorm"
 	"time"
 )
+
+// ErrNoSuchTx returned when no wallet with such id found
+var ErrNoSuchTx = errors.New("txs: no tx with such id found")
 
 // DateRangeFilter used to filter txs by last update or creation time. If bound value is nil, such filter will not be
 // applied.
@@ -16,17 +19,33 @@ type DateRangeFilter struct {
 }
 
 // UserFilter filter txs by user phone (txs for all user wallet will be returned). Should be non empty, normalized
-// form isn't required.
+// form isn't required. If value is wrong, ErrInvalidUserPhone will be returned
 type UserFilter string
+
+// ErrInvalidUserPhone when user phone is invalid
+var ErrInvalidUserPhone = errors.New("txs: invalid user phone")
+
+// StatusFilter filter txs by their statuses. Should be non empty. If value is wrong, ErrInvalidStatus will be returned
+type StatusFilter string
+
+// ErrInvalidUserPhone when user phone is invalid
+var ErrInvalidStatus = errors.New("txs: invalid status")
 
 // WalletIDFilter filter by wallet.
 type WalletIDFilter int64
 
-// RecipientPhoneFilter filter by recipient phone number
+// RecipientPhoneFilter filter by recipient phone number. Should be non empty, normalized form isn't required. If value
+// is wrong, ErrInvalidRecipientPhone will be returned
 type RecipientPhoneFilter string
+
+// ErrInvalidRecipientPhone when recipient phone is invalid
+var ErrInvalidRecipientPhone = errors.New("txs: recipient phone is invalid")
 
 // CoinFilter filter by coin name. This value is case insensitive.
 type CoinFilter string
+
+// ErrInvalidCoinName returned when specified coin name is invalid
+var ErrInvalidCoinName = errors.New("txs: invalid coin name")
 
 // Pager applies pager
 type Pager struct {
@@ -41,8 +60,10 @@ type Filterer interface {
 
 // IApi this api used to access transactions
 type IApi interface {
-	// Get get transaction by ID
-	Get(ctx context.Context, id int64) (*processing.Tx, error)
+	// Get transaction by ID. Also accept optional user phone argument, if it's provided, then tx will be returned
+	// only for specified user. If provided value is invalid, ErrInvalidUserPhone will be returned. If
+	// no rows found, then ErrNoSuchTx will be returned.
+	Get(ctx context.Context, id int64, restrictUserPhone ...string) (*processing.Tx, error)
 
 	// GetFiltered list of transactions filtered using fitlterers. If pager doesn't limit items count, then default
 	// items count will be returned.
@@ -54,60 +75,8 @@ type IApi interface {
 
 //
 type filterContext struct {
-	db                *gorm.DB
+	tx                *gorm.DB
+	q                 *gorm.DB
 	fromWalletsJoined bool
 	toWalletsJoined   bool
-}
-
-//
-func (f DateRangeFilter) filter(ctx filterContext) (nCtx filterContext, err error) {
-	nCtx = ctx
-
-	if f.FromTime == nil && f.UntilTime == nil {
-		return
-	}
-	if f.FromTime != nil && !f.FromTime.IsZero() {
-		nCtx.db = nCtx.db.Where("txs.updated_at >= ?", f.FromTime)
-	}
-
-	if f.FromTime != nil && !f.FromTime.IsZero() {
-		nCtx.db = nCtx.db.Where("txs.updated_at <= ?", f.FromTime)
-	}
-	return
-}
-
-func (f UserFilter) filter(ctx filterContext) (nCtx filterContext, err error) {
-	nCtx = ctx
-
-	phone, err := types.NewPhone(string(f))
-	if err != nil {
-		return
-	}
-
-	nCtx = safeJoinWallets(nCtx)
-	nCtx.db = nCtx.db.Where("wallets.user_phone = ?", phone)
-	return
-}
-
-func (f WalletIDFilter) filter(ctx filterContext) (nCtx filterContext, err error) {
-	nCtx = ctx
-	nCtx.db = nCtx.db.Where("wallets.from_wallet_id = ?", f)
-	return
-}
-
-func (f RecipientPhoneFilter) filter(ctx filterContext) (nCtx filterContext, err error) {
-	nCtx = safeJoinWallets(ctx)
-	nCtx.db = nCtx.db.Joins("inner join (select * wallets where user_phone = ?) on ")
-	nCtx.db = nCtx.db.Where("wallets.user_phone = ?")
-}
-
-// safeJoinWallets applies join on query safely
-func safeJoinWallets(ctx filterContext) (nCtx filterContext) {
-	nCtx = ctx
-
-	if !ctx.fromWalletsJoined {
-		nCtx.db = nCtx.db.Joins("inner join wallets on txs.from_wallet_id = wallets.id")
-		nCtx.fromWalletsJoined = true
-	}
-	return
 }

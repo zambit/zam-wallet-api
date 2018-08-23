@@ -3,10 +3,10 @@ package wallets
 import (
 	decimal2 "git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
-	"strconv"
-	"strings"
 	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
 	"github.com/ericlagergren/decimal"
+	"strconv"
+	"strings"
 )
 
 // CreateRequest used to parse create wallet request body params
@@ -81,7 +81,7 @@ func ResponseFromWallet(wallet wallets.WalletWithBalance, additionalRate Additio
 	balances := map[string]*decimal2.View{
 		strings.ToLower(wallet.Coin.ShortName): (*decimal2.View)(wallet.Balance),
 	}
-	if additionalRate.Currency != ""  {
+	if additionalRate.Currency != "" {
 		var value *decimal2.View
 		if additionalRate.Rate != nil {
 			value = (*decimal2.View)(additionalRate.Convert(wallet.Balance))
@@ -93,7 +93,7 @@ func ResponseFromWallet(wallet wallets.WalletWithBalance, additionalRate Additio
 
 	return Response{
 		Wallet: View{
-			ID:       getWalletIDView(wallet.ID),
+			ID:       GetWalletIDView(wallet.ID),
 			Coin:     strings.ToLower(wallet.Coin.ShortName),
 			Name:     wallet.Name,
 			Address:  wallet.Address,
@@ -112,7 +112,7 @@ func AllResponseFromWallets(
 	views := make([]View, 0, len(wallets))
 	var next string
 	if len(wallets) > 0 && hasNext {
-		next = getWalletIDView(wallets[len(wallets)-1].ID)
+		next = GetWalletIDView(wallets[len(wallets)-1].ID)
 	}
 
 	for _, w := range wallets {
@@ -131,13 +131,13 @@ func AllResponseFromWallets(
 	}
 }
 
-// getWalletIDView wallet id to view representation
-func getWalletIDView(id int64) string {
+// GetWalletIDView wallet id to view representation
+func GetWalletIDView(id int64) string {
 	return strconv.FormatInt(id, 10)
 }
 
-// parseWalletIDView
-func parseWalletIDView(rawID string) (id int64, valid bool) {
+// ParseWalletIDView
+func ParseWalletIDView(rawID string) (id int64, valid bool) {
 	id, parseIntErr := strconv.ParseInt(rawID, 10, 64)
 	valid = parseIntErr == nil
 	return
