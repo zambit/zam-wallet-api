@@ -5,15 +5,14 @@ import (
 	"context"
 	"fmt"
 	"git.zam.io/wallet-backend/wallet-api/pkg/services/convert"
-	"github.com/dghubble/sling"
 	"github.com/ericlagergren/decimal"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/segmentio/objconv/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
-	"github.com/opentracing/opentracing-go"
 )
 
 const multiPricePath = "/data/pricemulti"
@@ -28,16 +27,15 @@ type responseBody map[string]map[string]float64
 // ICoinConverter uses cryptocompare.com shitty api for getting currencies rates values
 type CryptoCurrency struct {
 	client *http.Client
-	sling  *sling.Sling
 	host   string
 }
 
 // New coin converter which uses icex.ch service, requires icex host parameter.
-func New(serbiceHost string) (convert.ICryptoCurrency, error) {
-	if serbiceHost == "" {
+func New(serviceHost string) (convert.ICryptoCurrency, error) {
+	if serviceHost == "" {
 		return nil, fmt.Errorf("cryptocompare converter: service host parameter is required")
 	} else {
-		fullEndpoint := serbiceHost
+		fullEndpoint := serviceHost
 		_, err := url.Parse(fullEndpoint)
 		if err != nil {
 			return nil, errors.Wrapf(
@@ -47,7 +45,7 @@ func New(serbiceHost string) (convert.ICryptoCurrency, error) {
 			)
 		}
 	}
-	return &CryptoCurrency{host: serbiceHost, client: &http.Client{}, sling: sling.New()}, nil
+	return &CryptoCurrency{host: serviceHost, client: &http.Client{}}, nil
 }
 
 // GetRate implements ICryptoCurrency
@@ -114,12 +112,13 @@ func (c *CryptoCurrency) doQuery(ctx context.Context, coinNames []string, dstCur
 	}
 	dstCurrencyName = strings.ToUpper(dstCurrencyName)
 
-	req, err := c.sling.New().Base(c.host).QueryStruct(&queryParams{
-		From: coinNames, To: dstCurrencyName,
-	}).Get(multiPricePath).Request()
-	if err != nil {
-		return
-	}
+	u, _ := url.Parse(c.host)
+	u.Path = multiPricePath
+	v := url.Values{}
+	v.Set("fsyms", strings.Join(coinNames, ","))
+	v.Set("tsyms", dstCurrencyName)
+	u.RawQuery = v.Encode()
+	req, _ := http.NewRequest("GET", u.String(), nil)
 
 	span.LogKV("convert_url", req.URL.String())
 
@@ -129,7 +128,7 @@ func (c *CryptoCurrency) doQuery(ctx context.Context, coinNames []string, dstCur
 		return
 	}
 
-	// TODO decode from request stream when debug will be off
+	// TODO decode from request stream when debug will be offed
 	data, rErr := ioutil.ReadAll(r.Body)
 	span.LogKV("resp_code", r.StatusCode)
 	span.LogKV("resp_body", string(data))
