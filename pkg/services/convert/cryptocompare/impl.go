@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"github.com/opentracing/opentracing-go"
 )
 
 const multiPricePath = "/data/pricemulti"
@@ -100,6 +101,9 @@ func (c *CryptoCurrency) GetMultiRate(ctx context.Context, coinNames []string, d
 }
 
 func (c *CryptoCurrency) doQuery(ctx context.Context, coinNames []string, dstCurrencyName string) (resp responseBody, err error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "cyptocompare_do_query")
+	defer span.Finish()
+
 	// uppercase all currencies
 	for i, name := range coinNames {
 		coinNames[i] = strings.ToUpper(name)
@@ -117,13 +121,18 @@ func (c *CryptoCurrency) doQuery(ctx context.Context, coinNames []string, dstCur
 		return
 	}
 
+	span.LogKV("convert_url", req.URL.String())
+
 	// perform query
 	r, err := c.client.Do(req.WithContext(ctx))
 	if err != nil {
 		return
 	}
 
+	// TODO decode from request stream when debug will be off
 	data, rErr := ioutil.ReadAll(r.Body)
+	span.LogKV("resp_code", r.StatusCode)
+	span.LogKV("resp_body", string(data))
 	if r.StatusCode != 200 {
 		if rErr != nil {
 			err = errors.Wrap(rErr, "cryptocompare converter: another error occurs while reading error response")
