@@ -4,6 +4,7 @@ import (
 	"context"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
+	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/common"
 	walletshandlers "git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/txs"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
@@ -155,6 +156,19 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 			return
 		}
 
+		// validate group param
+		// TODO should be performed by validator
+		var groupTxs bool
+		if params.Group != "" {
+			switch params.Group {
+			case "hour", "day", "week", "month":
+				groupTxs = true
+			default:
+				// ignore invalid param
+				params.Group = ""
+			}
+		}
+
 		// extract user phone
 		userPhone, err := middlewares.GetUserPhoneFromCtxE(c)
 		if err != nil {
@@ -169,14 +183,14 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 		}
 
 		var (
-			allTxs  []processing.Tx
-			count   int64
-			hasNext bool
+			allTxs     []processing.Tx
+			totalCount int64
+			hasNext    bool
 		)
 		err = trace.InsideSpanE(ctx, "get_txs", func(ctx context.Context, span opentracing.Span) error {
 			var err error
 			// get tx using txs api
-			allTxs, count, hasNext, err = txsApi.GetFiltered(ctx, filters...)
+			allTxs, totalCount, hasNext, err = txsApi.GetFiltered(ctx, filters...)
 			return err
 		})
 		if err != nil {
@@ -193,17 +207,32 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 		}
 
 		// get rates ignore error
-		rates, _ := getRatesForTxs(ctx, allTxs, params.Convert, converter)
+		rates, _ := getRatesForTxs(ctx, allTxs, params.Convert, converter, common.DefaultCryptoCurrency)
 
-		// prepare response body
-		mr := MultipleResponse{
-			Transactions: ToAllView(allTxs, userPhone, rates),
-			Count:        count,
-		}
+		var next *string
 		if hasNext && len(allTxs) > 0 {
-			mr.Next = ToIdView(allTxs[len(allTxs)-1].ID)
+			t := ToIdView(allTxs[len(allTxs)-1].ID)
+			next = &t
 		}
-		resp = mr
+		count := len(allTxs)
+
+		if !groupTxs {
+			// prepare response body for ungrounded txs
+			resp = MultipleResponse{
+				Transactions: ToAllView(allTxs, userPhone, rates),
+				TotalCount:   totalCount,
+				Count:        count,
+				Next:         next,
+			}
+		} else {
+			// prepare response for grouped txs
+			resp = GroupedResponse{
+				GroupedTransactions: ToGroupViews(allTxs, userPhone, rates, params.Group),
+				TotalCount:          totalCount,
+				Count:               count,
+				Next:                next,
+			}
+		}
 		return
 	}
 }
@@ -286,7 +315,8 @@ func generateFilters(params GetAllRequest, userPhone string) (filters []txs.Filt
 		filters = append(filters, txs.DateRangeFilter{FromTime: from, UntilTime: to})
 	}
 	// apply pagination
-	if params.Count != nil || params.Page != nil {
+	// it will be applied despite of incoming params because there is default rows limit
+	{
 		pager := txs.Pager{}
 		if params.Count != nil {
 			pager.Count = *params.Count

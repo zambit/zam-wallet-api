@@ -46,6 +46,7 @@ func getRatesForTxs(
 	txs []processing.Tx,
 	dstFiatCurrency string,
 	converter convert.ICryptoCurrency,
+	additionalCoinCurrency string,
 ) (bRates common.AdditionalRates, err error) {
 	// coerce fiat currency name
 	if dstFiatCurrency == "" {
@@ -62,6 +63,9 @@ func getRatesForTxs(
 				coinsSet := make(map[string]struct{})
 				for _, tx := range txs {
 					coinsSet[tx.FromWallet.Coin.ShortName] = struct{}{}
+				}
+				if additionalCoinCurrency != "" {
+					coinsSet[strings.ToUpper(additionalCoinCurrency)] = struct{}{}
 				}
 
 				coinsList := make([]string, 0, len(coinsSet))

@@ -252,7 +252,7 @@ func joinToWalletsOnce(ctx filterContext) (nCtx filterContext) {
 	nCtx = ctx
 
 	if !ctx.toWalletsJoined {
-		nCtx.q = nCtx.q.Joins("inner join wallets as to_wallets on txs.to_wallet_id = to_wallets.id")
+		nCtx.q = nCtx.q.Joins("left outer join wallets as to_wallets on txs.to_wallet_id = to_wallets.id")
 		nCtx.toWalletsJoined = true
 	}
 	return

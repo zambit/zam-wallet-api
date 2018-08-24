@@ -5,6 +5,8 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/common"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
+	bdecimal "github.com/ericlagergren/decimal"
+	"github.com/jinzhu/now"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +35,7 @@ type GetAllRequest struct {
 	Page      *string `form:"page"`
 	Count     *int64  `form:"count"`
 	Convert   string  `form:"convert"`
+	Group     string  `form:"group"`
 }
 
 // UnixTimeView marshales into unix time format
@@ -62,9 +65,26 @@ type SingleResponse struct {
 
 // MultipleResponse
 type MultipleResponse struct {
-	Count        int64  `json:"count"`
-	Next         string `json:"next"`
-	Transactions []View `json:"transactions"`
+	TotalCount   int64   `json:"total_count"`
+	Count        int     `json:"count"`
+	Next         *string `json:"next"`
+	Transactions []View  `json:"transactions"`
+}
+
+// GroupView
+type GroupView struct {
+	StartDate    UnixTimeView                `json:"start_date"`
+	EndDate      UnixTimeView                `json:"end_date"`
+	TotalAmount  common.MultiCurrencyBalance `json:"total_amount"`
+	Transactions []View                      `json:"transactions"`
+}
+
+// GroupedResponse holds txs in grouped parts
+type GroupedResponse struct {
+	TotalCount          int64       `json:"total_count"`
+	Count               int         `json:"count"`
+	Next                *string     `json:"next"`
+	GroupedTransactions []GroupView `json:"grouped_transactions"`
 }
 
 // ToIdView converts tx id to api representation
@@ -112,6 +132,96 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		Amount:    rate.RepresentBalance(tx.Amount.V),
 		CreatedAt: UnixTimeView(tx.CreatedAt),
 	}
+}
+
+// ToGroupViews
+func ToGroupViews(txs []processing.Tx, userPhone string, rates common.AdditionalRates, group string) []GroupView {
+	if len(txs) == 0 {
+		return nil
+	}
+
+	// TODO approximate groups count
+	groups := make([]GroupView, 0, 10)
+
+	// determine groups func on group arg
+	groupStartFunc := func(time.Time) time.Time {
+		return time.Time{}
+	}
+	groupEndFunc := func(time.Time) time.Time {
+		return time.Time{}
+	}
+
+	switch group {
+	case "hour":
+		groupStartFunc = func(t time.Time) time.Time {
+			return now.New(t).BeginningOfHour()
+		}
+		groupEndFunc = func(t time.Time) time.Time {
+			return now.New(t).EndOfHour().Add(time.Nanosecond * 2)
+		}
+	case "day":
+		groupStartFunc = func(t time.Time) time.Time {
+			return now.New(t).BeginningOfDay()
+		}
+		groupEndFunc = func(t time.Time) time.Time {
+			return now.New(t).EndOfDay().Add(time.Nanosecond * 2)
+		}
+	case "week":
+		groupStartFunc = func(t time.Time) time.Time {
+			return now.New(t).BeginningOfWeek()
+		}
+		groupEndFunc = func(t time.Time) time.Time {
+			return now.New(t).EndOfWeek().Add(time.Nanosecond * 2)
+		}
+	case "month":
+		groupStartFunc = func(t time.Time) time.Time {
+			return now.New(t).BeginningOfMonth()
+		}
+		groupEndFunc = func(t time.Time) time.Time {
+			return now.New(t).EndOfMonth().Add(time.Nanosecond * 2)
+		}
+	default:
+		panic("unexpected group")
+	}
+
+	//
+	for i := 0; i < len(txs); i++ {
+		startG := groupStartFunc(txs[i].CreatedAt)
+		endG := groupEndFunc(txs[i].CreatedAt)
+
+		groupped := make([]View, 0, 5)
+		groupFiatTotal := new(bdecimal.Big)
+
+		for y, tx := range txs[i:] {
+			if tx.CreatedAt.After(endG) {
+				i += y
+				break
+			}
+			groupped = append(groupped, *ToView(&tx, userPhone, rates.ForCoinCurrency(tx.FromWallet.Coin.ShortName)))
+			groupFiatTotal.Add(
+				groupFiatTotal,
+				rates.CurrencyRate(tx.FromWallet.Coin.ShortName).ReverseConvert(tx.Amount.V),
+			)
+			// advance i onto last iteration
+			if len(txs)-i-y == 1 {
+				i += y
+			}
+		}
+
+		// convert back from total in fiat into default currency
+		groupDefaultCoinTotal := rates.CurrencyRate(common.DefaultCryptoCurrency).Convert(groupFiatTotal)
+
+		// crete group
+		defaultCurrencyRate := rates.ForCoinCurrency(common.DefaultCryptoCurrency)
+		groups = append(groups, GroupView{
+			StartDate:    UnixTimeView(startG),
+			EndDate:      UnixTimeView(endG),
+			TotalAmount:  defaultCurrencyRate.RepresentBalance(groupDefaultCoinTotal),
+			Transactions: groupped,
+		})
+	}
+
+	return groups
 }
 
 // ToAllView
