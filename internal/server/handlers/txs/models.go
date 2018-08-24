@@ -48,7 +48,7 @@ func (t *UnixTimeView) MarshalJSON() ([]byte, error) {
 // View tx api representation
 type View struct {
 	ID        string                      `json:"id"`
-	WalletID  string                      `json:"wallet_id,omitempty"`
+	WalletID  string                      `json:"wallet_id"`
 	Direction string                      `json:"direction"`
 	Status    string                      `json:"status"`
 	Coin      string                      `json:"coin"`
@@ -117,6 +117,9 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		}
 	} else {
 		sender = tx.FromWallet.UserPhone
+		if tx.ToWalletID != nil {
+			walletID = wallets.GetWalletIDView(*tx.ToWalletID)
+		}
 	}
 
 	coinName := strings.ToLower(tx.FromWallet.Coin.ShortName)

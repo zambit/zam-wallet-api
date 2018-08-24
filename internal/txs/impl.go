@@ -107,6 +107,7 @@ func (api *Api) GetFiltered(ctx context.Context, filters ...Filterer) (txs []pro
 		}
 
 		// loads transactions
+		// TODO this scan may be highly optimized if we would explicitly specify list of returned columns
 		err = addTxPreloads(q).Order("txs.created_at").Find(&txs).Error
 		if err != nil {
 			return err
@@ -167,7 +168,7 @@ func (f UserFilter) filter(ctx filterContext) (nCtx filterContext, err error) {
 
 func (f WalletIDFilter) filter(ctx filterContext) (nCtx filterContext, err error) {
 	nCtx = ctx
-	nCtx.q = nCtx.q.Where("txs.from_wallet_id = ?", f)
+	nCtx.q = nCtx.q.Where("(txs.from_wallet_id = ? or txs.to_wallet_id = ?)", f, f)
 	return
 }
 
