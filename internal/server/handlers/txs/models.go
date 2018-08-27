@@ -193,7 +193,7 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 		startG := groupStartFunc(txs[i].CreatedAt)
 		endG := groupEndFunc(txs[i].CreatedAt)
 
-		groupped := make([]View, 0, 5)
+		groupped := make([]View, 0, 3)
 		groupFiatTotal := new(bdecimal.Big)
 
 		for y, tx := range txs[i:] {
@@ -212,12 +212,15 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 			)
 
 			// calc total fiat sum depending on tx direction
-			isOutgoing := tx.FromWallet.UserPhone == userPhone
-			txFiatAmount := rates.CurrencyRate(tx.FromWallet.Coin.ShortName).Convert(tx.Amount.V)
-			if !isOutgoing {
-				groupFiatTotal.Add(groupFiatTotal, txFiatAmount)
-			} else {
-				groupFiatTotal.Sub(groupFiatTotal, txFiatAmount)
+			// not counts txs which is can be spent againt
+			if tx.IsHoldsAmount() {
+				isOutgoing := tx.FromWallet.UserPhone == userPhone
+				txFiatAmount := rates.CurrencyRate(tx.FromWallet.Coin.ShortName).Convert(tx.Amount.V)
+				if !isOutgoing {
+					groupFiatTotal.Add(groupFiatTotal, txFiatAmount)
+				} else {
+					groupFiatTotal.Sub(groupFiatTotal, txFiatAmount)
+				}
 			}
 
 			// advance i onto last iteration

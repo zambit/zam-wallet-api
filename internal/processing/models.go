@@ -31,6 +31,7 @@ const (
 const (
 	TxStateValidate       = "waiting"
 	TxStateDeclined       = "decline"
+	TxStateCanceled       = "cancel"
 	TxStateAwaitRecipient = "pending"
 	TxStateProcessed      = "success"
 )
@@ -58,4 +59,14 @@ type Tx struct {
 
 func (Tx) TableName() string {
 	return "txs"
+}
+
+// IsHoldsAmount checks is this txs transaction holds his amount, e.g. such amount of money cannot be spent again
+func (tx *Tx) IsHoldsAmount() bool {
+	switch tx.Status.Name {
+	case TxStateDeclined, TxStateCanceled:
+		return false
+	default:
+		return true
+	}
 }
