@@ -1,0 +1,1 @@
+drop table txs_external;
