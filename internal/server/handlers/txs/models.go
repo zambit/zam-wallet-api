@@ -76,7 +76,7 @@ type GroupView struct {
 	StartDate    UnixTimeView                `json:"start_date"`
 	EndDate      UnixTimeView                `json:"end_date"`
 	TotalAmount  common.MultiCurrencyBalance `json:"total_amount"`
-	Transactions []View                      `json:"transactions"`
+	Transactions []View                      `json:"items"`
 }
 
 // GroupedResponse holds txs in grouped parts
@@ -84,7 +84,7 @@ type GroupedResponse struct {
 	TotalCount          int64       `json:"total_count"`
 	Count               int         `json:"count"`
 	Next                *string     `json:"next"`
-	GroupedTransactions []GroupView `json:"grouped_transactions"`
+	GroupedTransactions []GroupView `json:"transactions"`
 }
 
 // ToIdView converts tx id to api representation
