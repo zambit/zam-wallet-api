@@ -151,13 +151,9 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 
 		// parse query params
 		params := GetAllRequest{}
-		err = c.ShouldBindQuery(&params)
-		if err != nil {
-			return
-		}
 
-		// validate group param
-		// TODO should be performed by validator
+		// TODO now params which follows invalid param will not be populated. Rework whole bind/validation layer
+		c.ShouldBindQuery(&params)
 		var groupTxs bool
 		if params.Group != "" {
 			switch params.Group {

@@ -188,6 +188,7 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 	}
 
 	//
+	defaultCurrencyRate := rates.ForCoinCurrency(common.DefaultCryptoCurrency)
 	for i := 0; i < len(txs); i++ {
 		startG := groupStartFunc(txs[i].CreatedAt)
 		endG := groupEndFunc(txs[i].CreatedAt)
@@ -200,11 +201,24 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 				i += y
 				break
 			}
-			groupped = append(groupped, *ToView(&tx, userPhone, rates.ForCoinCurrency(tx.FromWallet.Coin.ShortName)))
-			groupFiatTotal.Add(
-				groupFiatTotal,
-				rates.CurrencyRate(tx.FromWallet.Coin.ShortName).ReverseConvert(tx.Amount.V),
+			groupped = append(
+				groupped,
+				*ToView(
+					&tx,
+					userPhone,
+					rates.ForCoinCurrency(tx.FromWallet.Coin.ShortName),
+				),
 			)
+
+			// calc total fiat sum depending on tx direction
+			isOutgoing := tx.FromWallet.UserPhone == userPhone
+			txFiatAmount := rates.CurrencyRate(tx.FromWallet.Coin.ShortName).Convert(tx.Amount.V)
+			if !isOutgoing {
+				groupFiatTotal.Add(groupFiatTotal, txFiatAmount)
+			} else {
+				groupFiatTotal.Sub(groupFiatTotal, txFiatAmount)
+			}
+
 			// advance i onto last iteration
 			if len(txs)-i-y == 1 {
 				i += y
@@ -212,10 +226,9 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 		}
 
 		// convert back from total in fiat into default currency
-		groupDefaultCoinTotal := rates.CurrencyRate(common.DefaultCryptoCurrency).Convert(groupFiatTotal)
+		groupDefaultCoinTotal := defaultCurrencyRate.ReverseConvert(groupFiatTotal)
 
 		// crete group
-		defaultCurrencyRate := rates.ForCoinCurrency(common.DefaultCryptoCurrency)
 		groups = append(groups, GroupView{
 			StartDate:    UnixTimeView(startG),
 			EndDate:      UnixTimeView(endG),
