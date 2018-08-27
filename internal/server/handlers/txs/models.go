@@ -197,7 +197,8 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 		groupFiatTotal := new(bdecimal.Big)
 
 		for y, tx := range txs[i:] {
-			if tx.CreatedAt.After(endG) {
+			// stop group if tx out of group bounds
+			if tx.CreatedAt.After(endG) || tx.CreatedAt.Before(startG) {
 				i += y
 				break
 			}

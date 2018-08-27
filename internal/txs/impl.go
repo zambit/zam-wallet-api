@@ -52,8 +52,9 @@ func (api *Api) Get(ctx context.Context, id int64, restrictUserPhone ...string) 
 func (api *Api) GetFiltered(ctx context.Context, filters ...Filterer) (txs []processing.Tx, totalCount int64, hasNext bool, err error) {
 	err = db.TransactionCtx(ctx, api.db, func(ctx context.Context, dbTx *gorm.DB) error {
 		q := dbTx.Model(&processing.Tx{})
+		var qWOPagination *gorm.DB
 
-		var lastItemID int64
+		var firstItemID int64
 		if len(filters) > 0 {
 			var paginator *Pager
 
@@ -72,11 +73,14 @@ func (api *Api) GetFiltered(ctx context.Context, filters ...Filterer) (txs []pro
 				}
 			}
 
-			// if paginator applied determine last item id
+			// save query WO pagination
+			qWOPagination = fCtx.q
+
+			// if paginator applied determine first item id and total items count
 			if paginator != nil {
-				var lasTx processing.Tx
-				// be sure only id of last tx is queried
-				err = fCtx.q.Select("txs.id").Last(&lasTx).Error
+				var firstTx processing.Tx
+				// be sure only id of first tx is queried
+				err = fCtx.q.Select("txs.id").First(&firstTx).Error
 				if err != nil {
 					// if no rows error occurs, that mean that no txs found which satisfies specified params, so
 					// we will return without error
@@ -85,7 +89,7 @@ func (api *Api) GetFiltered(ctx context.Context, filters ...Filterer) (txs []pro
 					}
 					return err
 				}
-				lastItemID = lasTx.ID
+				firstItemID = firstTx.ID
 
 				fCtx, err = paginator.filter(fCtx)
 				if err != nil {
@@ -97,7 +101,7 @@ func (api *Api) GetFiltered(ctx context.Context, filters ...Filterer) (txs []pro
 		}
 
 		// determine txs count
-		err = q.Count(&totalCount).Error
+		err = qWOPagination.Count(&totalCount).Error
 		if err != nil {
 			return err
 		}
@@ -108,14 +112,17 @@ func (api *Api) GetFiltered(ctx context.Context, filters ...Filterer) (txs []pro
 
 		// loads transactions
 		// TODO this scan may be highly optimized if we would explicitly specify list of returned columns
-		err = addTxPreloads(q).Order("txs.created_at").Find(&txs).Error
+		err = addTxPreloads(q).Order("txs.created_at desc").Find(&txs).Error
 		if err != nil {
 			return err
 		}
+		if len(txs) == 0 {
+			return nil
+		}
 
 		// determine if there more rows available after this page
-		if lastItemID != 0 {
-			hasNext = lastItemID > txs[len(txs)-1].ID
+		if firstItemID != 0 {
+			hasNext = firstItemID < txs[len(txs)-1].ID
 		}
 
 		return err
@@ -232,7 +239,7 @@ func (f *Pager) filter(ctx filterContext) (nCtx filterContext, err error) {
 		nCtx.q = nCtx.q.Limit(f.Count)
 	}
 	if f.FromID != 0 {
-		nCtx.q = nCtx.q.Where("txs.id > ?", f.FromID)
+		nCtx.q = nCtx.q.Where("txs.id < ?", f.FromID)
 	}
 	return
 }
