@@ -189,7 +189,7 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 
 	//
 	defaultCurrencyRate := rates.ForCoinCurrency(common.DefaultCryptoCurrency)
-	for i := 0; i < len(txs); i++ {
+	for i := 0; i < len(txs); {
 		startG := groupStartFunc(txs[i].CreatedAt)
 		endG := groupEndFunc(txs[i].CreatedAt)
 
@@ -224,8 +224,9 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 			}
 
 			// advance i onto last iteration
+			// simply to break outer loop
 			if len(txs)-i-y == 1 {
-				i += y
+				i += y + 1
 			}
 		}
 
