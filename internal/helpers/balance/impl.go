@@ -26,7 +26,7 @@ func New(coordinator nodes.ICoordinator, api processing.IApi) *Balance {
 
 // AccountBalance implements IBalance
 func (b *Balance) AccountBalanceCtx(ctx context.Context, coinName string) (balance *decimal.Big, err error) {
-	return b.Coordinator.AccountObserverWithCtx(ctx, coinName).GetBalance()
+	return b.Coordinator.AccountObserver(coinName).GetBalance(ctx)
 }
 
 // TotalWalletBalance implements IBalance
@@ -39,7 +39,7 @@ func (b *Balance) TotalWalletBalanceCtx(ctx context.Context, wallet *queries.Wal
 	// query address balance using node service
 	var addressBalance *decimal.Big
 	trace.InsideSpan(ctx, "get_node_address_balance", func(ctx context.Context, span ot.Span) {
-		addressBalance, err = b.Coordinator.ObserverWithCtx(ctx, wallet.Coin.ShortName).Balance(wallet.Address)
+		addressBalance, err = b.Coordinator.Observer(wallet.Coin.ShortName).Balance(ctx, wallet.Address)
 		span.LogKV("address_balance", addressBalance)
 	})
 	if err != nil {

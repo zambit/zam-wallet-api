@@ -1,7 +1,6 @@
 package nodes
 
 import (
-	"context"
 	"errors"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
@@ -31,19 +30,16 @@ type ICoordinator interface {
 	Close() error
 
 	// Generator returns generator which belongs to a specified coin or ErrNoSuchCoin
-	Generator(coinName string) (IGenerator, error)
+	Generator(coinName string) IGenerator
 
 	// Observer returns wallet observer for specified coin.
 	Observer(coinName string) IWalletObserver
 
-	// ObserverWithCtx same as Observer, but attaches given context
-	ObserverWithCtx(ctx context.Context, coinName string) IWalletObserver
-
 	// AccountObserver returns account observer for specific coin.
 	AccountObserver(coinName string) IAccountObserver
 
-	// AccountObserver same as AccountObserver, but attaches given context
-	AccountObserverWithCtx(ctx context.Context, coinName string) IAccountObserver
+	// TxsObserver get txs observer implementation by coin name
+	TxsObserver(coinName string) ITxsObserver
 }
 
 // New creates new default coordinator
@@ -64,6 +60,7 @@ type coordinator struct {
 	generators       map[string]IGenerator
 	observers        map[string]IWalletObserver
 	accountObservers map[string]IAccountObserver
+	txsObserevr      map[string]ITxsObserver
 }
 
 // Dial lookup service provider registry, dial no safe with concurrent getters usage
@@ -110,23 +107,23 @@ func (c *coordinator) Close() (err error) {
 }
 
 // Generator implements ICoordinator interface
-func (c *coordinator) Generator(coinName string) (IGenerator, error) {
+func (c *coordinator) Generator(coinName string) IGenerator {
 	coinName = strings.ToUpper(coinName)
 
 	if _, ok := c.closers[coinName]; !ok {
-		return nil, ErrNoSuchCoin
+		panic(ErrNoSuchCoin)
 	}
 
 	generator, ok := c.generators[coinName]
 	if !ok {
-		return nil, ErrCoinServiceNotImplemented
+		return retErrGenerator{e: ErrCoinServiceNotImplemented}
 	}
 
-	return generator, nil
+	return generator
 }
 
-// Generator implements ICoordinator interface
-func (c *coordinator) ObserverWithCtx(ctx context.Context, coinName string) IWalletObserver {
+// Observer implements ICoordinator interface
+func (c *coordinator) Observer(coinName string) IWalletObserver {
 	coinName = strings.ToUpper(coinName)
 
 	if _, ok := c.closers[coinName]; !ok {
@@ -137,21 +134,11 @@ func (c *coordinator) ObserverWithCtx(ctx context.Context, coinName string) IWal
 	if !ok {
 		return retErrWalletObserver{e: ErrCoinServiceNotImplemented}
 	}
-	return observer.WithContext(ctx).(IWalletObserver)
-}
-
-// Observer implements ICoordinator interface
-func (c *coordinator) Observer(coinName string) IWalletObserver {
-	return c.ObserverWithCtx(context.Background(), coinName)
+	return observer
 }
 
 // AccountObserver implements ICoordinator interface
 func (c *coordinator) AccountObserver(coinName string) IAccountObserver {
-	return c.AccountObserverWithCtx(context.Background(), coinName)
-}
-
-// AccountObserverWithCtx implements ICoordinator interface
-func (c *coordinator) AccountObserverWithCtx(ctx context.Context, coinName string) IAccountObserver {
 	coinName = strings.ToUpper(coinName)
 
 	if _, ok := c.closers[coinName]; !ok {
@@ -162,5 +149,20 @@ func (c *coordinator) AccountObserverWithCtx(ctx context.Context, coinName strin
 	if !ok {
 		return retErrAccountObserver{e: ErrCoinServiceNotImplemented}
 	}
-	return observer.WithContext(ctx).(IAccountObserver)
+	return observer
+}
+
+// TxsObserver implements ICoordinator interface
+func (c *coordinator) TxsObserver(coinName string) ITxsObserver {
+	coinName = strings.ToUpper(coinName)
+
+	if _, ok := c.closers[coinName]; !ok {
+		panic(ErrNoSuchCoin)
+	}
+
+	observer, ok := c.txsObserevr[coinName]
+	if !ok {
+		return retErrTxsObserver{e: ErrCoinServiceNotImplemented}
+	}
+	return observer
 }

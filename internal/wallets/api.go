@@ -41,7 +41,7 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 	coinName = strings.ToUpper(coinName)
 	span.LogKV("coin_name", coinName)
 
-	// validate name name
+	// validate coin name
 	_, err = queries.GetCoin(api.database, coinName)
 	if err != nil {
 		return
@@ -53,11 +53,7 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 		return
 	}
 
-	// validate name and get generator for specific name using coordinator
-	generator, err := api.coordinator.Generator(coinName)
-	if err != nil {
-		return
-	}
+	generator := api.coordinator.Generator(coinName)
 
 	// since we wouldn't allow an user to create multiple wallets of
 	// same name here we relies onto unique user/name constraint
@@ -87,7 +83,7 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 
 		// after wallet was successfully created we may generate new wallet address
 		trace.InsideSpan(ctx, "wallet_generation", func(ctx context.Context, span opentracing.Span) {
-			wallet.Address, err = generator.Create()
+			wallet.Address, err = generator.Create(ctx)
 			if err != nil {
 				trace.LogErrorWithMsg(span, err, "error occurs while generating wallet address")
 			}

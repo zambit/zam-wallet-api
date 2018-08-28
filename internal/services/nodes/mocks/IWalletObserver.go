@@ -10,13 +10,13 @@ type IWalletObserver struct {
 	mock.Mock
 }
 
-// Balance provides a mock function with given fields: address
-func (_m *IWalletObserver) Balance(address string) (*decimal.Big, error) {
-	ret := _m.Called(address)
+// Balance provides a mock function with given fields: ctx, address
+func (_m *IWalletObserver) Balance(ctx context.Context, address string) (*decimal.Big, error) {
+	ret := _m.Called(ctx, address)
 
 	var r0 *decimal.Big
-	if rf, ok := ret.Get(0).(func(string) *decimal.Big); ok {
-		r0 = rf(address)
+	if rf, ok := ret.Get(0).(func(context.Context, string) *decimal.Big); ok {
+		r0 = rf(ctx, address)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*decimal.Big)
@@ -24,27 +24,11 @@ func (_m *IWalletObserver) Balance(address string) (*decimal.Big, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(address)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, address)
 	} else {
 		r1 = ret.Error(1)
 	}
 
 	return r0, r1
-}
-
-// WithContext provides a mock function with given fields: ctx
-func (_m *IWalletObserver) WithContext(ctx context.Context) interface{} {
-	ret := _m.Called(ctx)
-
-	var r0 interface{}
-	if rf, ok := ret.Get(0).(func(context.Context) interface{}); ok {
-		r0 = rf(ctx)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(interface{})
-		}
-	}
-
-	return r0
 }

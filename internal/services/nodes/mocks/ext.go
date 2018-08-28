@@ -2,8 +2,8 @@ package mocks
 
 import (
 	"strings"
-	"github.com/stretchr/testify/mock"
 	"github.com/ericlagergren/decimal"
+	"github.com/stretchr/testify/mock"
 )
 
 func (c *ICoordinator) GetWalletObserver(coinName string) (obs *IWalletObserver) {
@@ -13,7 +13,6 @@ func (c *ICoordinator) GetWalletObserver(coinName string) (obs *IWalletObserver)
 			if isMockPanic(r) {
 				obs = &IWalletObserver{}
 				c.On("Observer", coinName).Times(10).Return(obs)
-				c.On("ObserverWithCtx", mock.Anything, coinName).Times(10).Return(obs)
 				return
 			}
 			panic(r)
@@ -31,7 +30,6 @@ func (c *ICoordinator) GetAccountObserver(coinName string) (obs *IAccountObserve
 			if isMockPanic(r) {
 				obs = &IAccountObserver{}
 				c.On("AccountObserver", coinName).Return(obs).Times(10)
-				c.On("AccountObserverWithCtx", mock.Anything, coinName).Return(obs).Times(10)
 				return
 			}
 			panic(r)
@@ -43,11 +41,11 @@ func (c *ICoordinator) GetAccountObserver(coinName string) (obs *IAccountObserve
 }
 
 func (wo *IWalletObserver) SetAddressBalance(address string, amount *decimal.Big) {
-	wo.On("Balance", address).Return(amount, nil)
+	wo.On("Balance", mock.Anything, address).Return(amount, nil)
 }
 
 func (ao *IAccountObserver) SetAccountBalance(amount *decimal.Big) {
-	ao.On("GetBalance").Return(amount, nil)
+	ao.On("GetBalance", mock.Anything).Return(amount, nil)
 }
 
 func isMockPanic(p interface{}) bool {

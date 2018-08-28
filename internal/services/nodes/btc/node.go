@@ -95,7 +95,7 @@ func (n *btcNode) Close() error {
 }
 
 // Create new BTC wallet chained with root wallet
-func (n *btcNode) Create() (address string, err error) {
+func (n *btcNode) Create(ctx context.Context) (address string, err error) {
 	err = n.doCall("getnewaddress", &address)
 	if err != nil {
 		return
@@ -107,11 +107,6 @@ func (n *btcNode) Create() (address string, err error) {
 	}
 
 	return
-}
-
-// WithContext does nothing right now TODO
-func (n *btcNode) WithContext(ctx context.Context) interface{} {
-	return n
 }
 
 // bigIntJSONView represent decimal.Big json representation
@@ -131,7 +126,7 @@ func (u *bigIntJSONView) UnmarshalJSON(data []byte) error {
 }
 
 // Balances returns wallet balance associated with given address using getreceivedbyaddress method
-func (n *btcNode) Balance(address string) (balance *decimal.Big, err error) {
+func (n *btcNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
 	var inputBalance bigIntJSONView
 	err = n.doCall("getreceivedbyaddress", &inputBalance, address)
 	if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
@@ -145,7 +140,7 @@ func (n *btcNode) Balance(address string) (balance *decimal.Big, err error) {
 }
 
 // GetBalance returns node account balance
-func (n *btcNode) GetBalance() (balance *decimal.Big, err error) {
+func (n *btcNode) GetBalance(ctx context.Context) (balance *decimal.Big, err error) {
 	var inputBalance bigIntJSONView
 	err = n.doCall("getbalance", &inputBalance)
 	if err != nil {
