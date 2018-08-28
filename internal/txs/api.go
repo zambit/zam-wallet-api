@@ -22,6 +22,10 @@ type DateRangeFilter struct {
 // form isn't required. If value is wrong, ErrInvalidUserPhone will be returned
 type UserFilter string
 
+// DirectionFilter filters txs by their direction, works only alongside UserFilter. True - incoming, false - outgoing.
+// Because i said so.
+type DirectionFilter bool
+
 // ErrInvalidUserPhone when user phone is invalid
 var ErrInvalidUserPhone = errors.New("txs: invalid user phone")
 
@@ -55,7 +59,7 @@ type Pager struct {
 
 // Filterer is visitor which applies filter conditions onto request
 type Filterer interface {
-	filter(ctx filterContext) (nCtx filterContext, err error)
+	filter(ctx filterCtx) (nCtx filterCtx, err error)
 }
 
 // IApi this api used to access transactions
@@ -74,9 +78,12 @@ type IApi interface {
 }
 
 //
-type filterContext struct {
-	tx                *gorm.DB
-	q                 *gorm.DB
+type filterCtx struct {
+	tx *gorm.DB
+	q  *gorm.DB
+
+	qWAPagination     *gorm.DB
 	fromWalletsJoined bool
 	toWalletsJoined   bool
+	direction         *DirectionFilter
 }

@@ -32,6 +32,7 @@ type GetAllRequest struct {
 	Recipient *string `form:"recipient"`
 	FromTime  *string `form:"from_time"`
 	UntilTime *string `form:"until_time"`
+	Direction *string `form:"direction"`
 	Page      *string `form:"page"`
 	Count     *int64  `form:"count"`
 	Convert   string  `form:"convert"`

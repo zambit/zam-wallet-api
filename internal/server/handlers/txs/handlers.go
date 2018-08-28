@@ -310,6 +310,15 @@ func generateFilters(params GetAllRequest, userPhone string) (filters []txs.Filt
 		}
 		filters = append(filters, txs.DateRangeFilter{FromTime: from, UntilTime: to})
 	}
+	if params.Direction != nil {
+		switch *params.Direction {
+		case "incoming":
+			filters = append(filters, txs.DirectionFilter(true))
+		case "outgoing":
+			filters = append(filters, txs.DirectionFilter(false))
+		}
+		// ignore invalid values
+	}
 	// apply pagination
 	// it will be applied despite of incoming params because there is default rows limit
 	{
