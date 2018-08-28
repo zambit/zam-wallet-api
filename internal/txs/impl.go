@@ -239,7 +239,7 @@ func (f CoinFilter) filter(ctx filterCtx) (nCtx filterCtx, err error) {
 	}
 
 	nCtx = joinFromWalletsOnce(ctx)
-	nCtx.q = nCtx.q.Where("wallets.coin_id = (select id from coins where short_name = ?)", string(f))
+	nCtx.q = nCtx.q.Where("wallets.coin_id = (select id from coins where short_name = ?)", coin)
 	return
 }
 
