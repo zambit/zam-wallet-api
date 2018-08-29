@@ -134,7 +134,7 @@ func (api *Api) SendInternal(
 		// create new wallet
 		pTx := &Tx{
 			FromWallet: wallet,
-			Type:       TxInternal,
+			Type:       TxTypeInternal,
 			Amount:     &postgres.Decimal{V: amount},
 			Status:     &stateModel,
 		}

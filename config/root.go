@@ -44,4 +44,6 @@ func Init(v *viper.Viper) {
 	v.SetDefault("JaegerConfig.Reporter.LogSpans", true)
 	v.SetDefault("JaegerConfig.Sampler.Type", "const")
 	v.SetDefault("JaegerConfig.Sampler.Param", 1)
+
+	v.SetDefault("Wallets.BTC.NeedConfirmationsCount", 6)
 }

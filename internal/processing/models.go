@@ -23,17 +23,18 @@ type TxType string
 
 // Tx types
 const (
-	TxInternal = "internal"
-	TxExternal = "external"
+	TxTypeInternal = "internal"
+	TxTypeExternal = "external"
 )
 
 // Tx states
 const (
-	TxStateValidate       = "waiting"
-	TxStateDeclined       = "decline"
-	TxStateCanceled       = "cancel"
-	TxStateAwaitRecipient = "pending"
-	TxStateProcessed      = "success"
+	TxStateValidate           = "waiting"
+	TxStateDeclined           = "decline"
+	TxStateCanceled           = "cancel"
+	TxStateAwaitRecipient     = "pending"
+	TxStateAwaitConfirmations = "pending"
+	TxStateProcessed          = "success"
 )
 
 // Tx represents database transaction row
@@ -69,4 +70,17 @@ func (tx *Tx) IsHoldsAmount() bool {
 	default:
 		return true
 	}
+}
+
+// ExternalTx represents external transaction row
+type TxExternal struct {
+	ID        int64
+	TxID      int64
+	Tx        *Tx `gorm:"foreignkey:TxID;association_autoupdate:false;association_autocreate:false"`
+	Hash      string
+	Recipient string
+}
+
+func (TxExternal) TableName() string {
+	return "txs_external"
 }

@@ -24,12 +24,15 @@ type ICoordinator interface {
 	// Dial coin for given params and add coin services to this coordinator
 	//
 	// If there is no actual implementation for required coin, ErrCoinIsUnsupported will be returned.
-	Dial(coinName string, host, user, pass string, testnet bool) error
+	Dial(coinName string, host, user, pass string, testnet bool, additionalParams map[string]interface{}) error
 
 	// Close closes all connections
 	Close() error
 
-	// Generator returns generator which belongs to a specified coin or ErrNoSuchCoin
+	// WatcherLoop returns watcher loop implementation for specified coin or ErrNoSuchCoin.
+	WatcherLoop(coinName string) (IWatcherLoop, error)
+
+	// Generator returns generator which belongs to a specified coin.
 	Generator(coinName string) IGenerator
 
 	// Observer returns wallet observer for specified coin.
@@ -50,6 +53,8 @@ func New(logger logrus.FieldLogger) ICoordinator {
 		generators:       make(map[string]IGenerator),
 		observers:        make(map[string]IWalletObserver),
 		accountObservers: make(map[string]IAccountObserver),
+		txsObserevers:    make(map[string]ITxsObserver),
+		watchers:         make(map[string]IWatcherLoop),
 	}
 }
 
@@ -60,11 +65,15 @@ type coordinator struct {
 	generators       map[string]IGenerator
 	observers        map[string]IWalletObserver
 	accountObservers map[string]IAccountObserver
-	txsObserevr      map[string]ITxsObserver
+	txsObserevers    map[string]ITxsObserver
+	watchers         map[string]IWatcherLoop
 }
 
 // Dial lookup service provider registry, dial no safe with concurrent getters usage
-func (c *coordinator) Dial(coinName string, host, user, pass string, testnet bool) error {
+func (c *coordinator) Dial(
+	coinName string, host, user, pass string, testnet bool,
+	additionalParams map[string]interface{},
+) error {
 	coinName = strings.ToUpper(coinName)
 
 	provider, ok := providers.Get(coinName)
@@ -72,7 +81,7 @@ func (c *coordinator) Dial(coinName string, host, user, pass string, testnet boo
 		return ErrCoinIsUnsupported
 	}
 
-	services, err := provider.Dial(c.logger, host, user, pass, testnet)
+	services, err := provider.Dial(c.logger, host, user, pass, testnet, additionalParams)
 	if err != nil {
 		return err
 	}
@@ -89,6 +98,14 @@ func (c *coordinator) Dial(coinName string, host, user, pass string, testnet boo
 
 	if observer, ok := services.(IAccountObserver); ok {
 		c.accountObservers[coinName] = observer
+	}
+
+	if observer, ok := services.(ITxsObserver); ok {
+		c.txsObserevers[coinName] = observer
+	}
+
+	if loop, ok := services.(IWatcherLoop); ok {
+		c.watchers[coinName] = loop
 	}
 
 	return nil
@@ -160,9 +177,24 @@ func (c *coordinator) TxsObserver(coinName string) ITxsObserver {
 		panic(ErrNoSuchCoin)
 	}
 
-	observer, ok := c.txsObserevr[coinName]
+	observer, ok := c.txsObserevers[coinName]
 	if !ok {
 		return retErrTxsObserver{e: ErrCoinServiceNotImplemented}
 	}
 	return observer
+}
+
+// TxsObserver implements ICoordinator interface
+func (c *coordinator) WatcherLoop(coinName string) (IWatcherLoop, error) {
+	coinName = strings.ToUpper(coinName)
+
+	if _, ok := c.closers[coinName]; !ok {
+		return nil, ErrNoSuchCoin
+	}
+
+	observer, ok := c.watchers[coinName]
+	if !ok {
+		return nil, ErrCoinServiceNotImplemented
+	}
+	return observer, nil
 }

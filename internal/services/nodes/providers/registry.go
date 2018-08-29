@@ -6,9 +6,14 @@ import (
 	"strings"
 )
 
-// Provider is not typo, it's noun derived from verb Dial
+// Provider
 type Provider interface {
-	Dial(logger logrus.FieldLogger, host, user, pass string, testnet bool) (io.Closer, error)
+	Dial(
+		logger logrus.FieldLogger,
+		host, user, pass string,
+		testnet bool,
+		additionalParams map[string]interface{},
+	) (io.Closer, error)
 }
 
 // registry is registry of per-coin service Provider

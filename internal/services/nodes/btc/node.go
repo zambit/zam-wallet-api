@@ -7,6 +7,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/danields761/jsonrpc"
 	"github.com/ericlagergren/decimal"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -23,22 +24,34 @@ const (
 
 // btcNode implements IGenerator interface for BTC/BCH nodes
 type btcNode struct {
-	logger    logrus.FieldLogger
-	client    *http.Client
-	rpcClient jsonrpc.RPCClient
+	coinName           string
+	logger             logrus.FieldLogger
+	client             *http.Client
+	rpcClient          jsonrpc.RPCClient
+	subscriber         func(ctx context.Context, blockHeight int) error
+	confirmationsCount int
 }
 
 // interfaces compile-time validations
 var _ nodes.IGenerator = (*btcNode)(nil)
 var _ nodes.IWalletObserver = (*btcNode)(nil)
 var _ nodes.IAccountObserver = (*btcNode)(nil)
+var _ nodes.ITxsObserver = (*btcNode)(nil)
+var _ nodes.IWatcherLoop = (*btcNode)(nil)
 
 // Dial creates client HTTP connection using passed params, also checks connectivity by sending "getwalletinfo" request.
 //
 // If port not specified, automatically applies appropriate default port for selected network.
 //
 // If scheme not specified, automatically applies default http scheme, https must be specified explicitly.
-func Dial(logger logrus.FieldLogger, coin, addr, user, pass string, testnet bool) (io.Closer, error) {
+//
+// Requires 'confirmations_count' additional parameter of type 'int'
+func Dial(
+	logger logrus.FieldLogger,
+	coin, addr, user, pass string,
+	testnet bool,
+	additionalParams map[string]interface{},
+) (io.Closer, error) {
 	// create client and sets default timeout everywhere
 	httpClient := &http.Client{
 		Transport: &http.Transport{
@@ -66,12 +79,28 @@ func Dial(logger logrus.FieldLogger, coin, addr, user, pass string, testnet bool
 		addr = fmt.Sprintf("http://%s", addr)
 	}
 
+	// get confirmation_count param
+	var confirmationsCount int
+	{
+		rawConfCount, ok := additionalParams["confirmations_count"]
+		if !ok {
+			return nil, errors.New("btc node: missing confirmations_count parameter")
+		}
+
+		confirmationsCount, ok = rawConfCount.(int)
+		if !ok {
+			return nil, errors.New("btc node: required confirmations_count parameter should be type of int")
+		}
+	}
+
 	n := &btcNode{
-		logger: logger.WithField("module", "wallets.btc."+coin),
+		logger: logger.WithField("module", "nodes."+coin),
 		client: httpClient,
 		rpcClient: jsonrpc.NewClientWithOpts(
 			addr, &jsonrpc.RPCClientOpts{HTTPClient: httpClient},
 		),
+		confirmationsCount: confirmationsCount,
+		coinName:           coin,
 	}
 	// ping node
 	err := n.Ping()
@@ -151,6 +180,25 @@ func (n *btcNode) GetBalance(ctx context.Context) (balance *decimal.Big, err err
 	return
 }
 
+// IsConfirmed gets number of tx confirmations using gettransaction rpc method and decides if tx confirmed or not
+// using confirmation count configuration value
+func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error) {
+	var resp struct {
+		Confirmations int `json:"confirmations"`
+	}
+	err = n.doCall("gettransaction", &resp, hash)
+	if err != nil {
+		if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
+			if rpcErr.Code == rpcErrInvalidAddressCode {
+				err = nodes.ErrNoSuchTx
+			}
+		}
+		return
+	}
+	confirmed = resp.Confirmations > n.confirmationsCount
+	return
+}
+
 // Ping node by calling getwalletinfo
 func (n *btcNode) Ping() error {
 	return n.doCall("getwalletinfo", nil)
@@ -214,8 +262,13 @@ type provider struct {
 	coin string
 }
 
-func (p provider) Dial(logger logrus.FieldLogger, host, user, pass string, testnet bool) (io.Closer, error) {
-	return Dial(logger, p.coin, host, user, pass, testnet)
+func (p provider) Dial(
+	logger logrus.FieldLogger,
+	host, user, pass string,
+	testnet bool,
+	additionalParams map[string]interface{},
+) (io.Closer, error) {
+	return Dial(logger, p.coin, host, user, pass, testnet, additionalParams)
 }
 
 func init() {

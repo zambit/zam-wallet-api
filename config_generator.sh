@@ -28,6 +28,8 @@ isc:
     statspath: /internal/stats
 
 wallets:
+    BTC:
+        NeedConfirmationsCount: 6
     cryptonodes:
         ' && [ ! -z "$BTC_HOST" ] && echo '
         btc:

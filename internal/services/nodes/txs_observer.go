@@ -1,8 +1,8 @@
 package nodes
 
 import (
-	"github.com/pkg/errors"
 	"context"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -12,8 +12,9 @@ var (
 
 // ITxsObserver used to observe transaction usually by their hash
 type ITxsObserver interface {
-	// GetHeight query tx height by it hash, returns ErrNoSuchTx if tx hasn't been found.
-	GetHeight(ctx context.Context, hash string) (height int, err error)
+	// IsConfirmed query tx confirmations count by tx hash and decides if tx confirmed or not, returns ErrNoSuchTx if
+	// tx hasn't been found.
+	IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error)
 }
 
 // retErrTxsObserver returns error on each call
@@ -22,6 +23,6 @@ type retErrTxsObserver struct {
 }
 
 // GetHeight implements ITxsObserver
-func (r retErrTxsObserver) GetHeight(ctx context.Context, hash string) (height int, err error) {
-	return 0, r.e
+func (r retErrTxsObserver) IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error) {
+	return false, r.e
 }
