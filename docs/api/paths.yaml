@@ -135,7 +135,7 @@
           - week
           - month
         description: |
-          Group transactions by time period, invalid value will be ignored
+          Group transactions by time period, parameter is case-insensitive, invalid value will be ignored.
         
           **NOTE** this parameter changes the way the transactions are displayed (sorry for shitty API), for more details look `GroupedTransactionsResponse` definition
       - in: query

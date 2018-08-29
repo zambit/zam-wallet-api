@@ -18,6 +18,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -156,6 +157,7 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 		c.ShouldBindQuery(&params)
 		var groupTxs bool
 		if params.Group != "" {
+			params.Group = strings.ToLower(params.Group)
 			switch params.Group {
 			case "hour", "day", "week", "month":
 				groupTxs = true
