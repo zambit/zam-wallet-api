@@ -30,7 +30,7 @@ build:
     - export GOPATH=`pwd`
 
     - mkdir -p $BUILD_OUT_DIR
-  
+
     # copy all files into go-style path
     - mkdir -p vendor
     - mkdir -p .src/$PROJECT_GO_PATH
@@ -69,53 +69,27 @@ build:
     paths:
       - build
 
-pages_build:
+docs_build:
   stage: build_docs
   variables:
-    OUT_FILE_NAME: $CI_COMMIT_REF_NAME.html
+    OUT_FILE_NAME: $CI_COMMIT_REF_NAME.json
   script:
     - mkdir -p docs
-    - npm install redoc-cli
     - npm install swagger-cli
-    - ./node_modules/swagger-cli/bin/swagger-cli.js bundle docs/api/index.yaml > boundled.json
-    - ./node_modules/redoc-cli/index.js bundle -o $OUT_FILE_NAME boundled.json
+    - ./node_modules/swagger-cli/bin/swagger-cli.js bundle docs/api/index.yaml > $OUT_FILE_NAME
     - cp $OUT_FILE_NAME docs/
   tags:
-   - build_srv
+    - build_srv
   artifacts:
     paths:
       - docs
   cache:
     key: node_modules
     paths:
-    - node_modules/
+      - node_modules/
   only:
     - master
     - development
-
-pages:
-  stage: build
-  script:
-    - mkdir -p public
-    - mkdir -p pages
-    - export OUT_FILE_NAME=$CI_COMMIT_REF_NAME.html
-    - cp docs/$OUT_FILE_NAME pages
-    - cp pages/* public
-  tags:
-   - build_srv
-  cache:
-    key: pages_cache
-    paths:
-    - pages/
-  artifacts:
-    paths:
-      - docs
-      - public
-  only:
-    - master
-    - development
-  dependencies:
-    - pages_build
 
 test:
   stage: test
@@ -153,3 +127,20 @@ deploy_on_staging:
     - master
   tags:
     - testing_srv
+
+docs_deploy_on_staging:
+  stage: deploy
+  variables:
+    DEPLOY_DIR: $STAGING_DEPLOY_DIR/docs/$EXECUTABLE_NAME/
+    OUT_FILE_NAME: $CI_COMMIT_REF_NAME.json
+  script:
+    - mkdir -p $DEPLOY_DIR
+    - cp docs/$OUT_FILE_NAME $DEPLOY_DIR
+  tags:
+    - testing_srv
+  artifacts:
+    paths:
+      - docs
+  only:
+    - master
+    - development

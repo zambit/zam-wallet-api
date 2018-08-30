@@ -1,28 +1,602 @@
----
-swagger: "2.0"
+openapi: 3.0.0
+
 info:
-  title: "ZamZam Wallet-API"
-  version: "0.0.1"
-  
-host: "znt03"
-basePath: "/api/v1"
-schemes:
-  - "https"
+  title: ZamZam Wallet-API
+  version: 0.0.1
 
-consumes:
-  - application/json
-produces:
-  - application/json
-
-securityDefinitions:
-  Bearer:
-    type: apiKey
-    name: Authorization
-    in: header
-    description: Requires "Bearer" prefix
+servers:
+  - url: 'https://git.zam.io/api/v1'
 
 paths:
-  $ref: "./paths.yaml"
+  /user/me/wallets:
+    post:
+      security:
+        - Bearer: []
+      summary: Create new user wallet for given coin
+      responses:
+        '201':
+          description: New wallet has been successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletResponse'
+        default:
+          description: In case of any error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errors'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWalletRequest'
+        description: Create wallet request
+        required: true
+    get:
+      security:
+        - Bearer: []
+      summary: Get all user wallets
+      parameters:
+        - in: query
+          name: coin
+          required: false
+          description: 'Filter by: coin name'
+          schema:
+            type: string
+        - in: query
+          name: wallet_id
+          required: false
+          description: Wallet ID
+          schema:
+            type: string
+        - in: query
+          name: page
+          required: false
+          description: Reference to the page
+          schema:
+            type: string
+        - in: query
+          name: count
+          required: false
+          description: Number of items to show on the page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: All user wallets in a list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllWalletsResponse'
+        default:
+          description: In case of any error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errors'
+  '/user/me/wallets/{wallet_id}':
+    parameters:
+      - in: path
+        name: wallet_id
+        required: true
+        description: Wallet ID
+        schema:
+          type: string
+    get:
+      security:
+        - Bearer: []
+      summary: Request user wallet info by wallet id
+      responses:
+        '200':
+          description: Wallets list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletResponse'
+        default:
+          description: In case of any error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errors'
+  /user/me/txs:
+    get:
+      security:
+        - Bearer: []
+      summary: Get all transactions or use filters
+      parameters:
+        - in: query
+          name: coin
+          required: false
+          description: 'Filter by: coin name'
+          schema:
+            type: string
+        - in: query
+          name: wallet_id
+          required: false
+          description: 'Filter by: wallet ID'
+          schema:
+            type: string
+        - in: query
+          name: recipient
+          required: false
+          description: 'Filter by: Recipient phone number'
+          schema:
+            type: string
+        - in: query
+          name: direction
+          required: false
+          description: 'Filter by: Transaction direction, invalid value will be ignored'
+          schema:
+            type: string
+            enum:
+              - incoming
+              - outgoing
+        - in: query
+          name: from_time
+          required: false
+          description: >-
+            Transactions occured after specified moment, invalid value will be
+            ignored
+          schema:
+            type: number
+            format: unix_utc
+        - in: query
+          name: until_time
+          required: false
+          description: >-
+            Transactions occured before  specified moment, invalid value will be
+            ignored
+          schema:
+            type: number
+            format: unix_utc
+        - in: query
+          name: page
+          required: false
+          description: Reference to the page
+          schema:
+            type: string
+        - in: query
+          name: count
+          required: false
+          description: Number of items to show on the page
+          schema:
+            type: integer
+        - in: query
+          name: group
+          description: >
+            Group transactions by time period, parameter is case-insensitive,
+            invalid value will be ignored.
 
-definitions:
-  $ref: "./definitions.yaml"
+
+            **NOTE** this parameter changes the way the transactions are
+            displayed (sorry for shitty API), for more details look
+            `GroupedTransactionsResponse` definition
+          schema:
+            type: string
+            enum:
+              - hour
+              - day
+              - week
+              - month
+        - in: query
+          name: convert
+          required: false
+          description: Fiat currency for additional amount representation
+          schema:
+            type: string
+            format: currency
+            default: usd
+      responses:
+        '200':
+          description: Transactions list
+          content:
+            application/json:
+              schema:
+                type: object
+                anyOf:
+                  - $ref: '#/components/schemas/GroupedTransactionsResponse'
+                  - $ref: '#/components/schemas/AllTransactionsResponse'
+        default:
+          description: In case of any error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errors'
+    post:
+      security:
+        - Bearer: []
+      summary: Send transaction
+      responses:
+        '201':
+          description: Pending transaction created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendTransactionResponse'
+        default:
+          description: In case of any error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errors'
+              examples:
+                response:
+                  value: |
+                    {"test": 1}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendTransactionRequest'
+        required: true
+  '/user/me/txs/{tx_id}':
+    parameters:
+      - in: path
+        name: tx_id
+        required: true
+        description: Transaction ID
+        schema:
+          type: string
+      - in: query
+        name: convert
+        required: false
+        description: Fiat currency for additional amount representation
+        schema:
+          type: string
+          format: currency
+          default: usd
+    get:
+      security:
+        - Bearer: []
+      summary: Get transaction for specified ID
+      responses:
+        '200':
+          description: Transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        default:
+          description: In case of any error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errors'
+
+components:
+  securitySchemes:
+    Bearer:
+      type: apiKey
+      name: Authorization
+      in: header
+      description: Requires "Bearer" prefix
+  schemas:
+    BaseResponse:
+      properties:
+        result:
+          type: boolean
+    
+    CoinType:
+      type: string
+      description: Specifies coin type
+      enum:
+        - eth
+        - btc
+        - bch
+        - zam
+    
+    CreateWalletRequest:
+      properties:
+        coin:
+          $ref: '#/components/schemas/CoinType'
+        wallet_name:
+          type: string
+          description: Optional name for user wallet
+      required:
+        - coin
+  
+    WalletData:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique wallet id
+        coin:
+          $ref: '#/components/schemas/CoinType'
+        wallet_name:
+          type: string
+          description: Optional name for user wallet
+        address:
+          type: string
+          description: Real address inside coin blockchain
+        balances:
+          type: object
+          description: Wallet balances in different units
+          additionalProperties:
+            type: number
+            properties:
+              code:
+                type: string
+                description: Fiat currency or cypto-coin name
+                example: btc
+              text:
+                type: number
+                description: Value of balance in specified currency or crypto-coin units
+                example: 100.12
+      required:
+        - id
+        - coin
+        - wallet_name
+        - address
+        - balance
+
+    WalletResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                wallet:
+                  $ref: '#/components/schemas/WalletData'
+
+    AllWalletsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                сount:
+                  type: integer
+                  description: Count of returned transactions
+                next:
+                  type: string
+                  description: Reference to the next page
+                wallets:
+                  items:
+                    $ref: '#/components/schemas/WalletData'
+ 
+    TransactionStatus:
+      description: |
+        Transaction status, descriptions:
+          - `waiting` - transaction on verification state
+          - `decline` - transaction has been rejected due to some reason (the reason returned from `POST ../txs` request)
+          - `pending` - transaction awaits until recipient create appropriate wallet
+          - `cancel` - transaction canceled because recipient hasn't create wallet in time
+          - `success` - transaction has been successfully performed
+      type: string
+      enum:
+        - waiting
+        - decline
+        - pending
+        - cancel
+        - success
+ 
+    TransactionData:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the transaction
+        wallet_id:
+          type: string
+          format: uuid
+          description: id of the wallet to which this transaction is related
+        direction:
+          type: string
+          description: direction of the transaction
+          enum:
+            - incoming
+            - outgoing
+        created_at:
+          description: time when transaction has been created
+          type: number
+          format: unix_utc
+        status:
+          description: current state of transaction
+          $ref: '#/components/schemas/TransactionStatus'
+        coin:
+          description: short name of the coin
+          $ref: '#/components/schemas/CoinType'
+        recipient:
+          type: string
+          description: |
+            **ONLY FOR OUTGOING TRANSACTIONS**
+            transaction recipient, currently this field represents only phones
+        sender:
+          type: string
+          description: |
+            **ONLY FOR INCOMING TRANSACTIONS**
+            transaction sender, currently this field represents only phones
+        amount:
+          type: object
+          description: >
+            The transaction amount in different units, one of them is the
+            transaction coin unit, second is either fiat system-default currency
+            (USD) or the currency which has been specified by `convert` query
+            parameter.
+
+
+            The amount are always positive despite of transaction direction.
+          additionalProperties:
+            type: number
+            properties:
+              code:
+                type: string
+                description: 'Fiat currency or cypto-currency name, always in lower-case'
+                example: btc
+              text:
+                type: number
+                description: Amount in specified currency units
+                example: 100.12
+      required:
+        - id
+        - wallet_id
+        - created_at
+        - direction
+        - amount
+        - status
+        - coin
+
+    TransactionsGroup:
+      type: object
+      properties:
+        start_date:
+          type: number
+          format: unix_utc
+          description: >
+            rounded begining of group (for hour - begining of hour, for day -
+            begining of day etc.)
+        end_date:
+          type: number
+          format: unix_utc
+          description: >
+            rounded end of group (for hour - end of hour, for day - end of day
+            etc.)
+        items:
+          description: List of transactions belongs to this group
+          items:
+            $ref: '#/components/schemas/TransactionData'
+        total_amount:
+          type: object
+          description: >
+            The total group transactions amount in different units, one of them
+            is default crypto currency (BTC now), second is either fiat
+            system-default currency (USD) or the currency which has been
+            specified by `convert` query parameter.
+
+
+            The total amount may be negative number.
+          additionalProperties:
+            type: number
+            properties:
+              code:
+                type: string
+                description: 'Fiat currency or cypto-currency name, always in lower-case'
+                example: btc
+              text:
+                type: number
+                description: Amount in specified currency units
+                example: 100.12
+
+    SendTransactionRequest:
+      properties:
+        wallet_id:
+          type: string
+          description: Wallet for featured transaction
+        recipient:
+          type: string
+          format: phone
+          description: Recipient phone (only phone supported for now)
+        amount:
+          type: number
+          description: 'Amount of transferred coins, must be greater then zero.'
+ 
+    SendTransactionResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                transaction:
+                  $ref: '#/components/schemas/TransactionData'
+ 
+    TransactionResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                transaction:
+                  $ref: '#/components/schemas/TransactionData'
+   
+    AllTransactionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                сount:
+                  type: integer
+                  description: Count of returned transactions
+                next:
+                  type: string
+                  description: Reference to the next page
+                transactions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TransactionData'
+    
+    GroupedTransactionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                сount:
+                  type: integer
+                  description: Count of returned transactions
+                next:
+                  type: string
+                  description: Reference to the next page
+                transactions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TransactionData'
+
+    Errors:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                anyOf:
+                  - $ref: '#/components/schemas/FieldError'
+                  - $ref: '#/components/schemas/Error'
+  
+    Error:
+      description: Error format which returned by handlers (usually internal errors)
+      type: object
+      properties:
+        message:
+          type: string
+          description: Describes error
+ 
+    FieldError:
+      type: object
+      description: >
+        This field is presented in case when error is cause of missed, misstyped
+        or wrong formatted request 
+
+        parameter passed throught POST JSON body, query or path
+      properties:
+        message:
+          type: string
+          description: Describes what wrong with this field
+        name:
+          type: string
+          description: Name of parameter which occurs error
+        input:
+          type: string
+          description: Describes the way in which this parameter has come
+      required:
+        - message
+        - name
+        - input
