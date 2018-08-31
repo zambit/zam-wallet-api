@@ -6,6 +6,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/db"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/ericlagergren/decimal"
@@ -32,6 +33,9 @@ var (
 
 	// ErrNegativeAmount when negative amount passed
 	ErrNegativeAmount = errors.New("processing: negative amount")
+
+	// ErrInvalidAddress external address are invalid
+	ErrInvalidAddress = errors.New("processing: invalid external address")
 )
 
 type InternalTxRecipientType int
@@ -62,7 +66,20 @@ func NewWalletRecipient(wallet *queries.Wallet) InternalTxRecipient {
 // process internal transactions, track their states and waits until specific user creates wallet.
 type IApi interface {
 	// SendInternal
-	SendInternal(ctx context.Context, wallet *queries.Wallet, recipient InternalTxRecipient, amount *decimal.Big) (newTx *Tx, err error)
+	SendInternal(
+		ctx context.Context,
+		wallet *queries.Wallet,
+		recipient InternalTxRecipient,
+		amount *decimal.Big,
+	) (newTx *Tx, err error)
+
+	// SendExternal
+	SendExternal(
+		ctx context.Context,
+		wallet *queries.Wallet,
+		address string,
+		amount *decimal.Big,
+	) (newTx *Tx, err error)
 
 	// GetTxsesSum get sum of outgoing and incoming transactions for specified wallet
 	GetTxsesSum(ctx context.Context, wallet *queries.Wallet) (sum *decimal.Big, err error)
@@ -77,6 +94,7 @@ type Api struct {
 	database      *gorm.DB
 	balanceHelper helpers.IBalance
 	notificator   isc.ITxsEventNotificator
+	coordinator   nodes.ICoordinator
 }
 
 // New
@@ -84,15 +102,17 @@ func New(
 	db *gorm.DB,
 	balanceHelper helpers.IBalance,
 	notificator isc.ITxsEventNotificator,
+	cooddinator nodes.ICoordinator,
 ) IApi {
 	return &Api{
 		database:      db,
 		balanceHelper: balanceHelper,
 		notificator:   notificator,
+		coordinator:   cooddinator,
 	}
 }
 
-// SendByPhone is IApi implementation
+// SendByPhone implements IApi interface
 func (api *Api) SendInternal(
 	ctx context.Context,
 	wallet *queries.Wallet,
@@ -110,19 +130,13 @@ func (api *Api) SendInternal(
 		"amount", amount,
 	)
 
-	// check amount, it should be greater then zero
-	switch amount.Sign() {
-	case 0:
-		err = ErrZeroAmount
-		return
-	case -1:
-		err = ErrNegativeAmount
+	// check most common amount errors
+	err = checkAmount(amount)
+	if err != nil {
 		return
 	}
 
 	var validationErrs error
-
-	// create new tx in transaction for future select for update
 	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, dbTx *gorm.DB) error {
 		// query status explicitly, no clear way with gorm :(
 		var stateModel TxStatus
@@ -154,10 +168,7 @@ func (api *Api) SendInternal(
 		span.LogKV("new_tx_id", newTx.ID)
 
 		// preform steps
-		newTx, validationErrs, err = StepTx(ctx, dbTx, newTx, &smResources{
-			BalanceHelper:      api.balanceHelper,
-			TxEventNotificator: api.notificator,
-		})
+		newTx, validationErrs, err = StepTx(ctx, dbTx, newTx, api.createExternalResources())
 
 		return err
 	})
@@ -168,6 +179,73 @@ func (api *Api) SendInternal(
 		span.LogKV("validation_errs", validationErrs, "message", "validation errs occurs")
 		err = validationErrs
 	}
+	return
+}
+
+// SendExternal implements IApi interface
+func (api *Api) SendExternal(
+	ctx context.Context,
+	wallet *queries.Wallet,
+	address string,
+	amount *decimal.Big,
+) (newTx *Tx, err error) {
+	err = trace.InsideSpanE(ctx, "send_external", func(ctx context.Context, span Span) error {
+		span.LogKV(
+			"from_wallet_id", wallet.ID,
+			"to_address", address,
+			"coin", wallet.Coin.ShortName,
+			"amount", amount,
+		)
+
+		// check most common amount errors
+		err := checkAmount(amount)
+		if err != nil {
+			return err
+		}
+
+		// check self tx
+		if wallet.Address == address {
+			return ErrSelfTxForbidden
+		}
+
+		var validationErrs error
+		err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, dbTx *gorm.DB) error {
+			// query status explicitly, no clear way with gorm :(
+			var stateModel TxStatus
+			err = dbTx.Model(&stateModel).Where("name = ?", TxStateValidate).First(&stateModel).Error
+			if err != nil {
+				return err
+			}
+
+			pTx := &Tx{
+				FromWallet: wallet,
+				Type:       TxTypeExternal,
+				Amount:     &postgres.Decimal{V: amount},
+				ToAddress:  &address,
+				Status:     &stateModel,
+			}
+
+			err = dbTx.Create(pTx).Error
+			if err != nil {
+				return err
+			}
+
+			newTx = pTx
+			span.LogKV("new_tx_id", pTx.ID)
+
+			// preform steps
+			newTx, validationErrs, err = StepTx(ctx, dbTx, pTx, api.createExternalResources())
+
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		if validationErrs != nil {
+			return validationErrs
+		}
+		return nil
+	})
 	return
 }
 
@@ -281,12 +359,30 @@ func (api *Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wal
 		// it's not good idea to transform all dependent transaction in single db transaction, need to elaborate...
 		for _, tx := range txsToUpdate {
 			// ignore validation errs, TODO should notify user
-			_, _, err = StepTx(ctx, dbTx, tx, &smResources{
-				BalanceHelper:      api.balanceHelper,
-				TxEventNotificator: api.notificator,
-			})
+			_, _, err = StepTx(ctx, dbTx, tx, api.createExternalResources())
 		}
 		return
 	})
 	return
+}
+
+func (api *Api) createExternalResources() *smResources {
+	return &smResources{
+		BalanceHelper:      api.balanceHelper,
+		TxEventNotificator: api.notificator,
+		Coordinator:        api.coordinator,
+	}
+}
+
+// utils
+// checkAmount validates that amount is greater then zero, otherwise returns appropriate error
+func checkAmount(amount *decimal.Big) error {
+	switch amount.Sign() {
+	case 0:
+		return ErrZeroAmount
+	case -1:
+		return ErrNegativeAmount
+	default:
+		return nil
+	}
 }

@@ -5,18 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
+	"git.zam.io/wallet-backend/common/pkg/types"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/db"
 	"github.com/ericlagergren/decimal"
+	"github.com/opentracing/opentracing-go"
 	"strings"
 	"sync"
-	"github.com/opentracing/opentracing-go"
-	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
-	"git.zam.io/wallet-backend/common/pkg/types"
-	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 )
 
 // Api provides methods to create wallets both in blockchain and db and query them
@@ -39,7 +39,7 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 
 	// uppercase coin name because everywhere coin short name used in such format
 	coinName = strings.ToUpper(coinName)
-	span.LogKV("coin_name", coinName)
+	span.LogKV("user_phone", userPhone, "coin_name", coinName)
 
 	// validate coin name
 	_, err = queries.GetCoin(api.database, coinName)
@@ -112,23 +112,28 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 
 // GetWallet returns wallet of given id
 func (api *Api) GetWallet(ctx context.Context, userPhone string, walletID int64) (wallet WalletWithBalance, err error) {
-	// coerce phone number
-	userPhone, err = coercePhoneNumber(userPhone)
-	if err != nil {
-		return
-	}
+	err = trace.InsideSpanE(ctx, "getting_wallet", func(ctx context.Context, span opentracing.Span) error {
+		// coerce phone number
+		userPhone, err = coercePhoneNumber(userPhone)
+		if err != nil {
+			return err
+		}
 
-	err = api.database.Tx(func(tx db.ITx) error {
-		wallet.Wallet, err = queries.GetWallet(tx, userPhone, walletID)
-		return err
+		err = api.database.Tx(func(tx db.ITx) error {
+			wallet.Wallet, err = queries.GetWallet(tx, userPhone, walletID)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+
+		return trace.InsideSpanE(ctx, "querying_balance", func(ctx context.Context, span opentracing.Span) error {
+			// query actual balance
+			var queryErr error
+			wallet.Balance, queryErr = api.queryBalance(ctx, &wallet.Wallet)
+			return queryErr
+		})
 	})
-	if err != nil {
-		return
-	}
-
-	// query actual balance
-	wallet.Balance, err = api.queryBalance(ctx, &wallet.Wallet)
-
 	return
 }
 
@@ -136,57 +141,68 @@ func (api *Api) GetWallet(ctx context.Context, userPhone string, walletID int64)
 func (api *Api) GetWallets(ctx context.Context, userPhone string, onlyCoin string, fromID, count int64) (
 	wts []WalletWithBalance, totalCount int64, hasNext bool, err error,
 ) {
-	// coerce phone number
-	userPhone, err = coercePhoneNumber(userPhone)
-	if err != nil {
-		return
-	}
+	err = trace.InsideSpanE(ctx, "getting_wallets", func(ctx context.Context, span opentracing.Span) error {
+		span.LogKV("user_phone", userPhone, "coin_name", onlyCoin)
 
-	var rawWts []queries.Wallet
-	err = api.database.Tx(func(tx db.ITx) error {
-		rawWts, totalCount, hasNext, err = queries.GetWallets(tx, userPhone, queries.GetWalletFilters{
-			ByCoin: onlyCoin,
-			FromID: fromID,
-			Count:  count,
+		// coerce phone number
+		userPhone, err := coercePhoneNumber(userPhone)
+		if err != nil {
+			return err
+		}
+
+		var rawWts []queries.Wallet
+		err = api.database.Tx(func(tx db.ITx) error {
+			rawWts, totalCount, hasNext, err = queries.GetWallets(tx, queries.GetWalletFilters{
+				UserPhone: userPhone,
+				ByCoin:    onlyCoin,
+				FromID:    fromID,
+				Count:     count,
+			})
+			return err
 		})
-		return err
-	})
-	if err != nil {
-		return
-	}
-	// query wallets balances async
-	wg := sync.WaitGroup{}
-	wg.Add(len(rawWts))
-	errsChan := make(chan error)
+		if err != nil {
+			return err
+		}
 
-	wts = make([]WalletWithBalance, len(rawWts))
-	for i, rawWallet := range rawWts {
-		// because right now amount of wallets belongs to an user ~= 3-4, it's more expediently to run goroutines
-		// rather then use workers pool
-		go func(i int, rawWallet queries.Wallet) {
-			defer wg.Done()
+		wts = make([]WalletWithBalance, len(rawWts))
+		// query wallets balances async in the span
+		return trace.InsideSpanE(ctx, "querying_balances", func(ctx context.Context, span opentracing.Span) error {
+			wg := sync.WaitGroup{}
+			wg.Add(len(rawWts))
+			errsChan := make(chan error)
 
-			var err error
-			wallet := WalletWithBalance{Wallet: rawWallet}
-			wallet.Balance, err = api.queryBalance(ctx, &wallet.Wallet)
-			if err != nil {
-				errsChan <- err
-				return
+			span.LogKV("wallets_num", len(wts))
+
+			for i, rawWallet := range rawWts {
+				// because right now amount of wallets belongs to an user ~= 3-4, it's more expediently to run goroutines
+				// rather then use workers pool
+				go func(i int, rawWallet queries.Wallet) {
+					defer wg.Done()
+
+					var queryErr error
+					wallet := WalletWithBalance{Wallet: rawWallet}
+					wallet.Balance, queryErr = api.queryBalance(ctx, &wallet.Wallet)
+					if queryErr != nil {
+						errsChan <- queryErr
+						return
+					}
+					wts[i] = wallet
+				}(i, rawWallet)
 			}
-			wts[i] = wallet
-		}(i, rawWallet)
-	}
 
-	// wait until all jobs done in separated goroutine
-	go func() {
-		wg.Wait()
-		close(errsChan)
-	}()
+			// wait until all jobs done in separated goroutine
+			go func() {
+				wg.Wait()
+				close(errsChan)
+			}()
 
-	//
-	for queryErr := range errsChan {
-		err = merrors.Append(err, queryErr)
-	}
+			//
+			for queryErr := range errsChan {
+				err = merrors.Append(err, queryErr)
+			}
+			return err
+		})
+	})
 	return
 }
 
@@ -199,73 +215,171 @@ func (api *Api) ValidateCoin(coinName string) (err error) {
 // SendToPhone sends internal transaction determining recipient wallet by source wallet and dest phone number. If
 // user not exists, transaction will be marked as "pending" and may be continued by `NotifyUserCreatesWallet` call.
 // May return ErrNoSuchWallet.
-func (api *Api) SendToPhone(ctx context.Context, userPhone string, walletID int64, toUserPhone string, amount *decimal.Big) (
-	newTx *processing.Tx, err error,
-) {
-	// coerce user phone number
-	userPhone, err = coercePhoneNumber(userPhone)
-	if err != nil {
-		return
-	}
+func (api *Api) SendToPhone(
+	ctx context.Context,
+	userPhone string,
+	walletID int64,
+	toUserPhone string,
+	amount *decimal.Big,
+) (newTx *processing.Tx, err error) {
+	err = trace.InsideSpanE(ctx, "send_to_phone", func(ctx context.Context, span opentracing.Span) error {
+		span.LogKV("user_phone", userPhone, "wallet_id", walletID, "to_user_phone", toUserPhone)
 
-	// gather validation errors
-	var validationErrs error
-	// coerce recipient phone number
-	toUserPhone, err = coercePhoneNumber(toUserPhone)
-	if err != nil {
-		validationErrs = merrors.Append(validationErrs, err)
-	}
-
-	// check amount
-	if amount.Sign() <= 0 {
-		validationErrs = merrors.Append(validationErrs, errs.ErrNonPositiveAmount)
-	}
-
-	// forbid self transactions
-	if userPhone == toUserPhone {
-		validationErrs = merrors.Append(validationErrs, errs.ErrSelfTxForbidden)
-	}
-
-	if validationErrs != nil {
-		err = validationErrs
-		return
-	}
-
-	var (
-		fromWallet     queries.Wallet
-		recipientDescr processing.InternalTxRecipient
-	)
-	err = api.database.Tx(func(tx db.ITx) (err error) {
-		// query source wallet
-		fromWallet, err = queries.GetWallet(tx, userPhone, walletID)
-		if err != nil {
-			return
-		}
-
-		// lookup destination user wallet
-		wts, _, _, err := queries.GetWallets(tx, toUserPhone, queries.GetWalletFilters{ByCoin: fromWallet.Coin.ShortName})
+		// coerce user phone number
+		userPhone, err = coercePhoneNumber(userPhone)
 		if err != nil {
 			return err
 		}
 
-		switch len(wts) {
-		case 0:
-			recipientDescr = processing.NewPhoneRecipient(toUserPhone)
-		case 1:
-			recipientDescr = processing.NewWalletRecipient(&wts[0])
-		default:
-			// we doesn't support multiple wallets of same coin which belongs to one user
-			err = errors.New("wallets: not implemented: user same coin multi wallet not supported")
-			return
+		// gather validation errors
+		var validationErrs error
+		// coerce recipient phone number
+		toUserPhone, err = coercePhoneNumber(toUserPhone)
+		if err != nil {
+			validationErrs = merrors.Append(validationErrs, err)
 		}
 
-		return
-	})
-	if err != nil {
-		return
-	}
+		// check amount
+		if amount.Sign() <= 0 {
+			validationErrs = merrors.Append(validationErrs, errs.ErrNonPositiveAmount)
+		}
 
-	newTx, err = api.processingApi.SendInternal(ctx, &fromWallet, recipientDescr, amount)
+		// forbid self transactions
+		if userPhone == toUserPhone {
+			validationErrs = merrors.Append(validationErrs, errs.ErrSelfTxForbidden)
+		}
+
+		if validationErrs != nil {
+			return validationErrs
+		}
+
+		var (
+			fromWallet     queries.Wallet
+			recipientDescr processing.InternalTxRecipient
+		)
+		err = api.database.Tx(func(tx db.ITx) (err error) {
+			// query source wallet
+			fromWallet, err = queries.GetWallet(tx, userPhone, walletID)
+			if err != nil {
+				return
+			}
+
+			// lookup destination user wallet
+			wts, _, _, err := queries.GetWallets(
+				tx,
+				queries.GetWalletFilters{UserPhone: toUserPhone, ByCoin: fromWallet.Coin.ShortName},
+			)
+			if err != nil {
+				return err
+			}
+
+			span.LogKV("dst_wallets_num", len(wts))
+
+			switch len(wts) {
+			case 0:
+				recipientDescr = processing.NewPhoneRecipient(toUserPhone)
+				trace.LogMsg(span, "sending by phone due to recipient wallet not found")
+			case 1:
+				recipientDescr = processing.NewWalletRecipient(&wts[0])
+				span.LogKV("dst_wallet_id", wts[0].ID)
+				trace.LogMsg(span, "sending to dst wallet")
+			default:
+				// we doesn't support multiple wallets of same coin which belongs to one user
+				return errors.New("wallets: not implemented: user same coin multi wallet not supported")
+			}
+
+			return nil
+		})
+		if err != nil {
+			trace.LogErrorWithMsg(span, err, "error occurs before sending")
+			return err
+		}
+
+		return trace.InsideSpanE(ctx, "internal_sending", func(ctx context.Context, span opentracing.Span) error {
+			var sendErr error
+			newTx, sendErr = api.processingApi.SendInternal(ctx, &fromWallet, recipientDescr, amount)
+			return sendErr
+		})
+	})
+	return
+}
+
+// SentToAddress
+func (api *Api) SentToAddress(
+	ctx context.Context,
+	userPhone string,
+	walletID int64,
+	toAddress string,
+	amount *decimal.Big,
+) (newTx *processing.Tx, err error) {
+	err = trace.InsideSpanE(ctx, "send_to_address", func(ctx context.Context, span opentracing.Span) error {
+		var (
+			fromWallet     queries.Wallet
+			sendInternally bool
+			sendToWallet   queries.Wallet
+		)
+
+		span.LogKV("user_phone", userPhone, "wallet_id", walletID, "to_address", toAddress, "amount", amount)
+
+		// coerce user phone number
+		userPhone, err = coercePhoneNumber(userPhone)
+		if err != nil {
+			return err
+		}
+
+		// check amount
+		if amount.Sign() <= 0 {
+			return errs.ErrNonPositiveAmount
+		}
+
+		err = api.database.Tx(func(tx db.ITx) error {
+			var err error
+			// query source wallet
+			fromWallet, err = queries.GetWallet(tx, userPhone, walletID)
+			if err != nil {
+				return err
+			}
+
+			// first we need to check is that address belongs to some recipientWallet in the system so this transaction
+			// will be sent internally
+			wts, _, _, err := queries.GetWallets(
+				tx,
+				queries.GetWalletFilters{ByCoin: fromWallet.Coin.ShortName, ByAddress: toAddress},
+			)
+			if err != nil {
+				return err
+			}
+			// if some wallets found, use them to send internal tx
+			if len(wts) > 0 {
+				sendInternally = true
+				sendToWallet = wts[0]
+				// don't allow self txs
+				if sendToWallet.UserPhone == userPhone {
+					return errs.ErrSelfTxForbidden
+				}
+			}
+			return nil
+		})
+
+		// make internal send if such decision has been made
+		if sendInternally {
+			return trace.InsideSpanE(ctx, "internal_sending", func(ctx context.Context, span opentracing.Span) error {
+				span.LogKV("to_wallet_id", sendToWallet.ID, "to_wallet_user_phone", sendToWallet.UserPhone)
+				var sendErr error
+				newTx, sendErr = api.processingApi.SendInternal(
+					ctx, &fromWallet, processing.NewWalletRecipient(&sendToWallet), amount,
+				)
+				return sendErr
+			})
+		}
+
+		return trace.InsideSpanE(ctx, "external_sending", func(ctx context.Context, span opentracing.Span) error {
+			span.LogKV("to_address", toAddress)
+			var sendErr error
+			newTx, sendErr = api.processingApi.SendExternal(ctx, &fromWallet, toAddress, amount)
+			return sendErr
+		})
+	})
 	return
 }
 

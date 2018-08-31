@@ -46,7 +46,7 @@ func (notifier *ConfirmationNotifier) OnNewConfirmation(ctx context.Context, coi
 		).Where(
 			"txs.type = ? and "+
 				"txs.status_id = (select id from tx_statuses where name = ?) and "+
-				" wallets.coin_id = (select id from coins where short_name = ?)",
+				"wallets.coin_id = (select id from coins where short_name = ?)",
 			TxTypeExternal, TxStateAwaitConfirmations, strings.ToUpper(coinName),
 		).Find(&pendingExternalTxs).Error
 	})
@@ -104,11 +104,11 @@ func (notifier *ConfirmationNotifier) OnNewConfirmation(ctx context.Context, coi
 	}
 	// don't break further processing if some confirmations errors has occurred, except case when each call has returned
 	// error
-	switch len(pendingExternalTxs) {
-	case 0:
-		return nil
-	case len(qErrs):
+	if len(pendingExternalTxs) == len(qErrs) {
 		return merrors.Append(nil, qErrs...)
+	}
+	if len(confirmedTxsIDs) == 0 {
+		return nil
 	}
 
 	// update txs statuses for confirmed transactions

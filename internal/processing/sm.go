@@ -5,6 +5,7 @@ import (
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
+	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
@@ -12,6 +13,7 @@ import (
 )
 
 type smResources struct {
+	Coordinator        nodes.ICoordinator
 	BalanceHelper      helpers.IBalance
 	TxEventNotificator isc.ITxsEventNotificator
 }
@@ -27,10 +29,10 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 	// step inside loop until steps available
 	for stepNum := 0; nextStep; stepNum++ {
 		trace.InsideSpan(ctx, "step_evaluation", func(ctx context.Context, span opentracing.Span) {
-			stateName := tx.Status.Name
+			stateName := tx.StateName()
 
 			// get state func
-			f, fName := getStateFunc(stateName), getStateFuncName(stateName)
+			f, fName := getStateFunc(stateName)
 
 			span.LogKV("step_func", fName, "step_num", stepNum, "state_name", stateName)
 
@@ -44,7 +46,7 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 				newState         string
 				stepValidateErrs error
 			)
-			newState, nextStep, stepValidateErrs, err = f(ctx, tx, res)
+			newState, nextStep, stepValidateErrs, err = f(ctx, dbTx, tx, res)
 			if err != nil {
 				return
 			}
@@ -84,7 +86,7 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 }
 
 //
-type stateFunc func(ctx context.Context, tx *Tx, res *smResources) (
+type stateFunc func(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (
 	newState string,
 	inWait bool,
 	validateErrs error,
@@ -92,40 +94,37 @@ type stateFunc func(ctx context.Context, tx *Tx, res *smResources) (
 )
 
 //
-func getStateFunc(state string) stateFunc {
+func getStateFunc(state string) (stateFunc, string) {
 	switch state {
 	case TxStateValidate:
-		return validateTxState
+		return validateTxState, "validating_tx"
 	case TxStateAwaitRecipient:
-		return recipientWalletCreated
+		return recipientWalletCreated, "await_recipient"
 	case TxStateProcessed, TxStateDeclined:
-		return nil
+		return nil, "noop"
 	default:
-		return nil
+		return nil, "noop"
 	}
 }
 
-func getStateFuncName(state string) string {
-	switch state {
-	case TxStateValidate:
-		return "validating_tx"
-	case TxStateAwaitRecipient:
-		return "await_recipient"
-	case TxStateProcessed, TxStateDeclined:
-		return "noop"
-	default:
-		return "noop"
-	}
-}
-
-func recipientWalletCreated(ctx context.Context, tx *Tx, res *smResources) (newState string, nextStep bool, validateErrs, err error) {
+func recipientWalletCreated(
+	ctx context.Context,
+	dbTx *gorm.DB,
+	tx *Tx,
+	res *smResources,
+) (newState string, nextStep bool, validateErrs, err error) {
 	// we don't need to verify sender balance again because tx in TxStateAwaitRecipient reserves it's amount
 	newState = TxStateProcessed
 	nextStep = true
 	return
 }
 
-func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState string, nextStep bool, validateErrs, err error) {
+func validateTxState(
+	ctx context.Context,
+	dbTx *gorm.DB,
+	tx *Tx,
+	res *smResources,
+) (newState string, nextStep bool, validateErrs, err error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "validate_tx")
 	defer span.Finish()
 
@@ -136,10 +135,10 @@ func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState st
 	if tx.FromWallet == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx src wallet is missing"))
 	}
-	if tx.ToPhone == nil && tx.ToWalletID == nil {
+	if tx.ToPhone == nil && tx.ToWalletID == nil && tx.ToAddress == nil {
 		validateErrs = merrors.Append(
 			validateErrs,
-			errors.New("either to_phone and to_wallet is empty, at least one should ne provided"),
+			errors.New("all to_phone, to_wallet and to_address is empty, at least one should ne provided"),
 		)
 	}
 	if validateErrs != nil {
@@ -151,10 +150,7 @@ func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState st
 	amount := tx.Amount.V
 
 	// forbid self transactions
-	switch {
-	case tx.ToWalletID != nil && tx.FromWalletID == *tx.ToWalletID:
-		validateErrs = merrors.Append(validateErrs, ErrSelfTxForbidden)
-	case tx.ToPhone != nil && tx.FromWallet.UserPhone == *tx.ToPhone:
+	if tx.IsSelfTx() {
 		validateErrs = merrors.Append(validateErrs, ErrSelfTxForbidden)
 	}
 
@@ -187,12 +183,14 @@ func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState st
 		newState = TxStateDeclined
 	} else {
 		switch {
-		case tx.ToWalletID != nil:
+		case tx.SendByWallet():
 			newState = TxStateProcessed
-		case tx.ToPhone != nil:
+		case tx.SendByPhone():
+			// TODO such async actions should be performed in individual state handler with individual state name
+			// because of savepoints which will be used in future to protect each state
 			trace.InsideSpan(ctx, "sending_await_recipient_notification", func(ctx context.Context, span opentracing.Span) {
 				notifErr := res.TxEventNotificator.AwaitRecipient(isc.TxEventPayload{
-					Coin:           tx.FromWallet.Coin.ShortName,
+					Coin:           tx.CoinName(),
 					FromWalletName: tx.FromWallet.Name,
 					FromPhone:      tx.FromWallet.UserPhone,
 					Amount:         tx.Amount.V,
@@ -204,6 +202,36 @@ func validateTxState(ctx context.Context, tx *Tx, res *smResources) (newState st
 				}
 			})
 			newState = TxStateAwaitRecipient
+		case tx.SendByAddress():
+			var txHash string
+			err = trace.InsideSpanE(ctx, "sending_tx", func(ctx context.Context, span opentracing.Span) error {
+				var err error
+				txHash, err = res.Coordinator.TxsSender(tx.CoinName()).Send(
+					ctx, tx.FromWallet.Address, *tx.ToAddress, tx.Amount.V,
+				)
+				return err
+			})
+			if err != nil {
+				if err == nodes.ErrAddressInvalid {
+					// return as validation err rather the ordinal error to save this transaction in txs history
+					err = nil
+					validateErrs = ErrInvalidAddress
+					newState = TxStateDeclined
+				}
+				return
+			}
+
+			// create external tx
+			err = dbTx.Create(&TxExternal{
+				Tx:        tx,
+				Hash:      txHash,
+				Recipient: *tx.ToAddress,
+			}).Error
+			if err != nil {
+				return
+			}
+
+			newState = TxStateAwaitConfirmations
 		}
 	}
 	return

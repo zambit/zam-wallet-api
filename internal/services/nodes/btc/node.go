@@ -180,6 +180,22 @@ func (n *btcNode) GetBalance(ctx context.Context) (balance *decimal.Big, err err
 	return
 }
 
+// Send implements ITxSender interface using sendtoaddress rpc method
+func (n *btcNode) Send(
+	ctx context.Context,
+	fromAddress,
+	toAddress string,
+	amount *decimal.Big,
+) (txHash string, err error) {
+	err = n.doCall("sendtoaddress", &txHash, toAddress, amount)
+	if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
+		if rpcErr.Code == rpcErrInvalidAddressCode {
+			err = nodes.ErrAddressInvalid
+		}
+	}
+	return
+}
+
 // IsConfirmed gets number of tx confirmations using gettransaction rpc method and decides if tx confirmed or not
 // using confirmation count configuration value
 func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error) {

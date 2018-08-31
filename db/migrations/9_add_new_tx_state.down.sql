@@ -1,0 +1,1 @@
+delete from tx_statuses where name = 'validation';

@@ -43,6 +43,9 @@ type ICoordinator interface {
 
 	// TxsObserver get txs observer implementation by coin name
 	TxsObserver(coinName string) ITxsObserver
+
+	// TxsSender get tx sender implementation by coin name
+	TxsSender(coinName string) ITxSender
 }
 
 // New creates new default coordinator
@@ -55,6 +58,7 @@ func New(logger logrus.FieldLogger) ICoordinator {
 		accountObservers: make(map[string]IAccountObserver),
 		txsObserevers:    make(map[string]ITxsObserver),
 		watchers:         make(map[string]IWatcherLoop),
+		senders:          make(map[string]ITxSender),
 	}
 }
 
@@ -67,6 +71,7 @@ type coordinator struct {
 	accountObservers map[string]IAccountObserver
 	txsObserevers    map[string]ITxsObserver
 	watchers         map[string]IWatcherLoop
+	senders          map[string]ITxSender
 }
 
 // Dial lookup service provider registry, dial no safe with concurrent getters usage
@@ -106,6 +111,10 @@ func (c *coordinator) Dial(
 
 	if loop, ok := services.(IWatcherLoop); ok {
 		c.watchers[coinName] = loop
+	}
+
+	if sender, ok := services.(ITxSender); ok {
+		c.senders[coinName] = sender
 	}
 
 	return nil
@@ -179,7 +188,7 @@ func (c *coordinator) TxsObserver(coinName string) ITxsObserver {
 
 	observer, ok := c.txsObserevers[coinName]
 	if !ok {
-		return retErrTxsObserver{e: ErrCoinServiceNotImplemented}
+		return retErrTxs{e: ErrCoinServiceNotImplemented}
 	}
 	return observer
 }
@@ -197,4 +206,19 @@ func (c *coordinator) WatcherLoop(coinName string) (IWatcherLoop, error) {
 		return nil, ErrCoinServiceNotImplemented
 	}
 	return observer, nil
+}
+
+// TxsSender implements ICoordinator interface
+func (c *coordinator) TxsSender(coinName string) ITxSender {
+	coinName = strings.ToUpper(coinName)
+
+	if _, ok := c.closers[coinName]; !ok {
+		panic(ErrNoSuchCoin)
+	}
+
+	sender, ok := c.senders[coinName]
+	if !ok {
+		return retErrTxs{e: ErrCoinServiceNotImplemented}
+	}
+	return sender
 }

@@ -150,19 +150,26 @@ func GetWallet(tx db.ITx, userPhone string, walletID int64, forUpdate ...bool) (
 
 // GetWalletFilters describes wallets filters
 type GetWalletFilters struct {
-	Count  int64
-	FromID int64
-	ByCoin string
+	UserPhone string
+	Count     int64
+	FromID    int64
+	ByCoin    string
+	ByAddress string
 }
 
 // GetWallets
-func GetWallets(tx db.ITx, userPhone string, filters GetWalletFilters) (
+func GetWallets(tx db.ITx, filters GetWalletFilters) (
 	wallets []Wallet, totalCount int64, hasNext bool, err error,
 ) {
 	// prepare where clause
-	whereClause := " WHERE wallets.user_phone = :user_phone"
+	whereClause := ""
 	limitClause := ""
-	whereArgs := map[string]interface{}{"user_phone": userPhone}
+	whereArgs := map[string]interface{}{}
+
+	if filters.UserPhone != "" {
+		whereClause = " WHERE wallets.user_phone = :user_phone"
+		whereArgs["user_phone"] = filters.UserPhone
+	}
 
 	if filters.ByCoin != "" {
 		// apply coin filter
@@ -174,6 +181,11 @@ func GetWallets(tx db.ITx, userPhone string, filters GetWalletFilters) (
 		// apply pagination
 		whereClause = whereClause + " AND wallets.id > :wallet_id"
 		whereArgs["wallet_id"] = filters.FromID
+	}
+	if filters.ByAddress != "" {
+		// apply address filter
+		whereClause = whereClause + " AND wallets.address = :address"
+		whereArgs["address"] = filters.ByAddress
 	}
 	if filters.Count != 0 {
 		// apply limit

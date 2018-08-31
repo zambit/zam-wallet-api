@@ -28,10 +28,12 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "insufficient funds",
 	}
-	errWrongTxAmount  = base.NewFieldErr("body", "amount", "must be greater then zero")
-	errTxAmountToBig  = base.NewFieldErr("body", "amount", "such a great value can not be accepted")
-	errNoSuchWallet   = base.NewFieldErr("body", "wallet_id", "no such wallet")
-	errRecipientIsYou = base.NewFieldErr("body", "recipient", "you can't send amount to your self")
+	errWrongTxAmount           = base.NewFieldErr("body", "amount", "must be greater then zero")
+	errTxAmountToBig           = base.NewFieldErr("body", "amount", "such a great value can not be accepted")
+	errNoSuchWallet            = base.NewFieldErr("body", "wallet_id", "no such wallet")
+	errRecipientIsYou          = base.NewFieldErr("body", "recipient", "you can't send amount to your self")
+	errRecipientPhoneInvalid   = base.NewFieldErr("body", "recipient", "invalid recipient phone")
+	errRecipientAddressInvalid = base.NewFieldErr("body", "recipient", "invalid recipient address")
 
 	// get tx errors
 	errTxIdInvalid = base.NewFieldErr("path", "tx_id", "tx id is invalid")
@@ -74,12 +76,26 @@ func SendFactory(walletApi *wallets.Api, converter convert.ICryptoCurrency) base
 		span.LogKV("user_phone", userPhone)
 
 		var tx *processing.Tx
-		err = trace.InsideSpanE(ctx, "send_to_phone", func(ctx context.Context, span opentracing.Span) error {
-			var err error
-			// try send money
-			tx, err = walletApi.SendToPhone(ctx, userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))
-			return err
-		})
+		if isCryproAddress(params.Recipient) {
+			err = trace.InsideSpanE(ctx, "send_to_address", func(ctx context.Context, span opentracing.Span) error {
+				var err error
+				tx, err = walletApi.SentToAddress(
+					ctx,
+					userPhone,
+					params.WalletID,
+					params.Recipient,
+					(*decimal.Big)(params.Amount),
+				)
+				return err
+			})
+		} else {
+			err = trace.InsideSpanE(ctx, "send_to_phone", func(ctx context.Context, span opentracing.Span) error {
+				var err error
+				// try send money
+				tx, err = walletApi.SendToPhone(ctx, userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))
+				return err
+			})
+		}
 		if err != nil {
 			err = coerceProcessingErrs(err)
 			return
@@ -257,10 +273,31 @@ func coerceProcessingErr(e error) (newE error) {
 		newE = errRecipientIsYou
 	case processing.ErrTxAmountToBig:
 		newE = errTxAmountToBig
+	case errs.ErrInvalidPhone:
+		newE = errRecipientPhoneInvalid
+	case processing.ErrInvalidAddress:
+		newE = errRecipientAddressInvalid
 	default:
 		newE = e
 	}
 	return
+}
+
+// isBtcAddress tries to guess is that sting represents btc address, address format description taken from here
+// https://en.bitcoinwiki.org/wiki/Bitcoin_address
+// Bitcoin address is an identifier (account number), starting with 1 or 3 or bc1 and containing 27-34 alphanumeric
+// Latin characters (except 0, O, I)
+func isBtcAddress(candidate string) bool {
+	if len(candidate) >= 27 && len(candidate) <= 42 {
+		return true
+	}
+
+	return false
+}
+
+// isCryproAddress looks is candidate looks like crypto-address
+func isCryproAddress(candidate string) bool {
+	return isBtcAddress(candidate)
 }
 
 // generates txs filters params for specified user

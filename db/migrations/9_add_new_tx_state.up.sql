@@ -1,0 +1,1 @@
+insert into tx_statuses (name) values ('validation');

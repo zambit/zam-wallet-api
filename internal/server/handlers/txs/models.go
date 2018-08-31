@@ -15,7 +15,7 @@ import (
 // SendRequest used to parse send tx request body
 type SendRequest struct {
 	WalletID  int64         `json:"wallet_id,string" validate:"required"`
-	Recipient string        `json:"recipient" validate:"required,phone"`
+	Recipient string        `json:"recipient" validate:"required"`
 	Amount    *decimal.View `json:"amount" validate:"required"`
 }
 
@@ -55,6 +55,7 @@ type View struct {
 	Coin      string                      `json:"coin"`
 	Recipient string                      `json:"recipient,omitempty"`
 	Sender    string                      `json:"sender,omitempty"`
+	Type      string                      `json:"type"`
 	Amount    common.MultiCurrencyBalance `json:"amount"`
 	CreatedAt UnixTimeView                `json:"created_at"`
 }
@@ -111,10 +112,12 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 	)
 	if isOutgoing {
 		walletID = wallets.GetWalletIDView(tx.FromWalletID)
-		if tx.ToPhone != nil {
+		if tx.SendByPhone() {
 			recipient = *tx.ToPhone
-		} else {
+		} else if tx.SendByWallet() {
 			recipient = tx.ToWallet.UserPhone
+		} else if tx.SendByAddress() {
+			recipient = *tx.ToAddress
 		}
 	} else {
 		sender = tx.FromWallet.UserPhone
@@ -133,6 +136,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		Coin:      coinName,
 		Recipient: recipient,
 		Sender:    sender,
+		Type:      string(tx.Type),
 		Amount:    rate.RepresentBalance(tx.Amount.V),
 		CreatedAt: UnixTimeView(tx.CreatedAt),
 	}
