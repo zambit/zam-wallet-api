@@ -6,6 +6,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/db"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"github.com/jinzhu/gorm"
+	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"strings"
 	"sync"
@@ -120,9 +121,12 @@ func (notifier *ConfirmationNotifier) OnNewConfirmation(ctx context.Context, coi
 			return err
 		}
 
-		return dbTx.Model(&Tx{}).Where(
-			"id in ?", confirmedTxsIDs,
-		).Update("StatusID", stateModel.ID).Error
+		_, err = dbTx.CommonDB().Exec(
+			`UPDATE "txs" SET "status_id" = $1  WHERE (id = ANY ($2::bigint[]));`,
+			stateModel.ID,
+			pq.Array(confirmedTxsIDs),
+		)
+		return err
 	})
 	if err != nil {
 		return errors.Wrap(err, "error occurs while updating transactions statuses")
