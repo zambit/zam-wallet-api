@@ -211,7 +211,7 @@ func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed bool,
 		}
 		return
 	}
-	confirmed = resp.Confirmations > n.confirmationsCount
+	confirmed = resp.Confirmations >= n.confirmationsCount
 	return
 }
 
