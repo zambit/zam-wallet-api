@@ -249,10 +249,12 @@ func (api *Api) SendExternal(
 	return
 }
 
+// aggregateTxsesQuery used to calculate txs sum for input and output separately
+// input is all internal and external transactions where destination wallet is given wallet, output is all
+// internal transactions where source wallet is given wallet
 const aggregateTxsesQuery = `with income as (select coalesce(sum(txs.amount), 0) as val
                 from txs
                 where to_wallet_id = $1
-                  and type = 'internal'
                   and status_id not in
                       (select id from tx_statuses where name = ANY('{cancel, decline}' :: varchar(30) []))),
      outcome as (select coalesce(sum(txs.amount), 0) as val
