@@ -69,6 +69,7 @@ build:
     paths:
       - build
 
+# docs_build job build docs from swagger specs
 docs_build:
   stage: build_docs
   variables:
@@ -87,9 +88,6 @@ docs_build:
     key: node_modules
     paths:
       - node_modules/
-  only:
-    - master
-    - development
 
 test:
   stage: test
@@ -105,11 +103,32 @@ test:
   dependencies:
     - build
 
+# deploy_production_build job copies build into production artifacts directory only for production branch with tag
+deploy_production_build:
+  stage: deploy
+  variables:
+    DEPLOY_DIR: $PRODUCTION_BUILDS_DIR/$EXECUTABLE_NAME/$CI_COMMIT_TAG
+  script:
+    - echo $DEPLOY_DIR
+    - mkdir -p $DEPLOY_DIR
+    - cp -r build/* $DEPLOY_DIR/
+  tags:
+    - build_srv
+  only:
+    - /^v.*$/
+  # HACK (avoiding lack of AND expression in `only` block) use negative lookahead to make all (except production)
+  # branches unsuitable for this job
+  except:
+    - /^(?!production).+@/
+  artifacts:
+    paths:
+    - build
+
 deploy_on_staging:
   stage: deploy
+  variables:
+    DEPLOY_DIR: $STAGING_DEPLOY_DIR/$EXECUTABLE_NAME
   script:
-    - export DEPLOY_DIR=$STAGING_DEPLOY_DIR/$EXECUTABLE_NAME
-
     # remove outdated binary and copy new one
     - mkdir -p $DEPLOY_DIR
     - rm -f $DEPLOY_DIR/$EXECUTABLE_NAME
