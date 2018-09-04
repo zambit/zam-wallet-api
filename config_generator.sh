@@ -19,8 +19,8 @@ server:
         RootURL: '$FRONTEND_URL'
 
     Convert:
-        Type: icex
-        FallbackType: cryptocompare
+        Type: cryptocompare
+        FallbackType: icex
         FallbackTimeout: 2s
 isc:
     brokeruri: '$BROKER_URI'
