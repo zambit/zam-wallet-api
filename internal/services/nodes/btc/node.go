@@ -130,12 +130,17 @@ func (n *btcNode) Create(ctx context.Context) (address string, err error) {
 		return
 	}
 
+	address = coerceAddress(address)
+
+	return
+}
+
+func coerceAddress(address string) string {
 	// trim prefixes when wallet appears as "prefix:address"
 	if index := strings.IndexRune(address, ':'); index != -1 {
 		address = address[index+1:]
 	}
-
-	return
+	return address
 }
 
 // bigIntJSONView represent decimal.Big json representation
@@ -212,6 +217,40 @@ func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed bool,
 		return
 	}
 	confirmed = resp.Confirmations >= n.confirmationsCount
+	return
+}
+
+type listTransactionsResultItem struct {
+	Address       string         `json:"address"`
+	Category      string         `json:"category"`
+	Amount        bigIntJSONView `json:"amount"`
+	Confirmations int            `json:"confirmations"`
+	Abandoned     bool           `json:"abandoned"`
+	TxID          string         `json:"txid"`
+}
+
+// GetIncoming implements ITxsObserver interface using listtransactions rpc method
+func (n *btcNode) GetIncoming(ctx context.Context) (txs []nodes.IncomingTxDescr, err error) {
+	var res []listTransactionsResultItem
+	err = n.doCall("listtransactions", &res)
+	if err != nil {
+		return
+	}
+
+	txs = make([]nodes.IncomingTxDescr, 0, len(res))
+	for _, r := range res {
+		if r.Category != "receive" {
+			continue
+		}
+		casted := decimal.Big(r.Amount)
+		txs = append(txs, nodes.IncomingTxDescr{
+			Hash:      r.TxID,
+			Address:   coerceAddress(r.Address),
+			Confirmed: r.Confirmations >= n.confirmationsCount,
+			Abandoned: r.Confirmations == -1 || r.Abandoned,
+			Amount:    &casted,
+		})
+	}
 	return
 }
 

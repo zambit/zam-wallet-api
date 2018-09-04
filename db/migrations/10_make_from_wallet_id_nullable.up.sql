@@ -1,0 +1,1 @@
+alter table txs alter column from_wallet_id drop not null;

@@ -11,11 +11,23 @@ var (
 	ErrNoSuchTx = errors.New("txs observer: no such tx")
 )
 
+// IncomingTxDescr
+type IncomingTxDescr struct {
+	Hash      string
+	Address   string
+	Confirmed bool
+	Abandoned bool
+	Amount    *decimal.Big
+}
+
 // ITxsObserver used to observe transaction usually by their hash
 type ITxsObserver interface {
 	// IsConfirmed query tx confirmations count by tx hash and decides if tx confirmed or not, returns ErrNoSuchTx if
 	// tx hasn't been found.
 	IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error)
+
+	// GetIncoming
+	GetIncoming(ctx context.Context) (txs []IncomingTxDescr, err error)
 }
 
 // ITxSender sends transaction from specified address
@@ -34,6 +46,11 @@ type retErrTxs struct {
 // GetHeight implements ITxsObserver
 func (r retErrTxs) IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error) {
 	return false, r.e
+}
+
+// GetIncoming implements ITxsObserver
+func (r retErrTxs) GetIncoming(ctx context.Context) (txs []IncomingTxDescr, err error) {
+	return nil, r.e
 }
 
 // Send implements ITxSender
