@@ -203,9 +203,12 @@ func (n *btcNode) Send(
 
 // IsConfirmed gets number of tx confirmations using gettransaction rpc method and decides if tx confirmed or not
 // using confirmation count configuration value
-func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error) {
+func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed, abandoned bool, err error) {
 	var resp struct {
 		Confirmations int `json:"confirmations"`
+		Details []struct{
+			Abandoned bool `json:"abandoned"`
+		} `json:"details"`
 	}
 	err = n.doCall("gettransaction", &resp, hash)
 	if err != nil {
@@ -217,6 +220,12 @@ func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed bool,
 		return
 	}
 	confirmed = resp.Confirmations >= n.confirmationsCount
+	for _, d := range resp.Details {
+		if d.Abandoned {
+			abandoned = true
+			break
+		}
+	}
 	return
 }
 

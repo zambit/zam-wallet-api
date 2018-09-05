@@ -22,9 +22,10 @@ type IncomingTxDescr struct {
 
 // ITxsObserver used to observe transaction usually by their hash
 type ITxsObserver interface {
-	// IsConfirmed query tx confirmations count by tx hash and decides if tx confirmed or not, returns ErrNoSuchTx if
+	// IsConfirmed query tx confirmations count by tx hash and decides if tx confirmed or not, also returns flag which
+	// indicates whether this tx is abandoned or not (abandoned txs are safe to spend again), returns ErrNoSuchTx if
 	// tx hasn't been found.
-	IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error)
+	IsConfirmed(ctx context.Context, hash string) (confirmed, abandoned bool, err error)
 
 	// GetIncoming
 	GetIncoming(ctx context.Context) (txs []IncomingTxDescr, err error)
@@ -44,8 +45,8 @@ type retErrTxs struct {
 }
 
 // GetHeight implements ITxsObserver
-func (r retErrTxs) IsConfirmed(ctx context.Context, hash string) (confirmed bool, err error) {
-	return false, r.e
+func (r retErrTxs) IsConfirmed(ctx context.Context, hash string) (confirmed, abandoned bool, err error) {
+	return false, false, r.e
 }
 
 // GetIncoming implements ITxsObserver

@@ -80,6 +80,7 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 		err       error
 		txId      int64
 		confirmed bool
+		abandoned bool
 	}
 	resChan := make(chan queryRes)
 	go func() {
@@ -92,7 +93,7 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 			defer wg.Done()
 
 			// query tx confirmation status
-			confirmed, err := notifier.coordinator.TxsObserver(coinName).IsConfirmed(
+			confirmed, adandoned, err := notifier.coordinator.TxsObserver(coinName).IsConfirmed(
 				context.Background(), tx.Hash,
 			)
 			if err != nil {
@@ -105,6 +106,7 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 			resChan <- queryRes{
 				txId:      tx.TxID,
 				confirmed: confirmed,
+				abandoned: adandoned,
 			}
 		}(&tx)
 	}
@@ -112,9 +114,12 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 	// gather results and errors
 	var qErrs []error
 	confirmedTxsIDs := make([]int64, 0, len(pendingExternalTxs))
+	abandonedTxsIDs := make([]int64, 0, len(pendingExternalTxs))
 	for res := range resChan {
 		if res.err != nil {
 			qErrs = append(qErrs, res.err)
+		} else if res.abandoned {
+			abandonedTxsIDs = append(abandonedTxsIDs, res.txId)
 		} else if res.confirmed {
 			confirmedTxsIDs = append(confirmedTxsIDs, res.txId)
 		}
@@ -124,27 +129,45 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 	if len(pendingExternalTxs) == len(qErrs) {
 		return merrors.Append(nil, qErrs...)
 	}
-	if len(confirmedTxsIDs) == 0 {
+	if len(confirmedTxsIDs) == 0 && len(abandonedTxsIDs) == 0 {
 		return nil
 	}
 
 	// update txs statuses for confirmed transactions
 	err = db.TransactionCtx(ctx, notifier.database, func(ctx context.Context, dbTx *gorm.DB) error {
-		// query status explicitly, no clear way with gorm :(
-		var stateModel TxStatus
-		err = dbTx.Model(&stateModel).Where("name = ?", TxStateProcessed).First(&stateModel).Error
-		if err != nil {
-			return err
+		// update confirmed transactions statuses
+		if len(pendingExternalTxs) == 0 {
+			err = updateTxsStatus(dbTx, confirmedTxsIDs, TxStateProcessed)
+			if err != nil {
+				return err
+			}
 		}
 
-		return dbTx.Model(&Tx{}).Where(
-			"id = ANY ($2::bigint[])", pq.Array(confirmedTxsIDs),
-		).Update("StatusID", stateModel.ID).Error
+		if len(abandonedTxsIDs) == 0 {
+			err = updateTxsStatus(dbTx, abandonedTxsIDs, TxStateDeclined)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return errors.Wrap(err, "error occurs while updating transactions statuses")
 	}
 	return nil
+}
+
+func updateTxsStatus(dbTx *gorm.DB, ids []int64, newStatusName string) error {
+	// query status explicitly, no clear way with gorm :(
+	var stateModel TxStatus
+	err := dbTx.Model(&stateModel).Where("name = ?", newStatusName).First(&stateModel).Error
+	if err != nil {
+		return err
+	}
+
+	return dbTx.Model(&Tx{}).Where(
+		"id = ANY ($2::bigint[])", pq.Array(ids),
+	).Update("StatusID", stateModel.ID).Error
 }
 
 func (notifier *ConfirmationNotifier) watchNewTxs(ctx context.Context, coinName string) error {
