@@ -1,11 +1,9 @@
 package root
 
 import (
-	"encoding/json"
 	"git.zam.io/wallet-backend/wallet-api/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
 	"strings"
 )
 
@@ -36,15 +34,8 @@ func Create(v *viper.Viper, cfg *config.RootScheme) cobra.Command {
 			v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 			v.AutomaticEnv()
 
-			// Unmarshal it
-			err = v.Unmarshal(cfg)
-			if err != nil {
-				return
-			}
-
-			e := json.NewEncoder(os.Stdout)
-			e.SetIndent(" ", "\t")
-			return e.Encode(cfg)
+			// map values which was build by viper from different source into single configuration object
+			return v.Unmarshal(cfg)
 		},
 		TraverseChildren: true,
 	}
