@@ -254,15 +254,14 @@ func (api *Api) SendExternal(
 // internal transactions where source wallet is given wallet
 const aggregateTxsesQuery = `with income as (select coalesce(sum(txs.amount), 0) as val
                 from txs
-                where to_wallet_id = $1
-                  and status_id not in
-                      (select id from tx_statuses where name = ANY('{cancel, decline}' :: varchar(30) []))),
+                where to_wallet_id = $1 and
+					type = 'internal' and
+                  	status_id in (select id from tx_statuses where name = 'success')),
      outcome as (select coalesce(sum(txs.amount), 0) as val
                  from txs
-                 where from_wallet_id = $1
-                   and type = 'internal'
-                   and status_id not in
-                       (select id from tx_statuses where name = ANY('{cancel, decline}' :: varchar(30) [])))
+                 where from_wallet_id = $1 and
+					status_id not in 
+						(select id from tx_statuses where name = ANY('{cancel, decline}' :: varchar(30) [])))
 select income.val - outcome.val as sum, income.val as income, outcome.val as outcome
 from income, outcome;`
 
@@ -282,6 +281,9 @@ func (api *Api) GetTxsesSum(ctx context.Context, wallet *queries.Wallet) (sum *d
 			outcome  *postgres.Decimal
 		)
 		rows, err := tx.Raw(aggregateTxsesQuery, wallet.ID).Rows()
+		if err != nil {
+			return err
+		}
 		// why not uses row? with gorm it sometimes doesn't work as expected, and i don't know why.
 		defer rows.Close()
 		for rows.Next() {
