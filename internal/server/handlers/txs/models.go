@@ -103,27 +103,32 @@ func FromIdView(idView string) (id int64, valid bool) {
 
 // ToView
 func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *View {
-	isOutgoing := tx.FromWallet.UserPhone == userPhone
 	// wallet id must be shadowed if tx is incoming
 	var (
 		walletID  string
 		recipient string
 		sender    string
+		direction string
 	)
-	if isOutgoing {
+	if tx.IsOutgoingForSide(userPhone) {
 		walletID = wallets.GetWalletIDView(tx.FromWalletID)
-		if tx.SendByPhone() {
+		switch {
+		case tx.SendByPhone():
 			recipient = *tx.ToPhone
-		} else if tx.SendByWallet() {
+		case tx.SendByWallet():
 			recipient = tx.ToWallet.UserPhone
-		} else if tx.SendByAddress() {
+		case tx.SendByAddress():
 			recipient = *tx.ToAddress
 		}
+
+		direction = "outgoing"
 	} else {
 		sender = tx.FromWallet.UserPhone
 		if tx.ToWalletID != nil {
 			walletID = wallets.GetWalletIDView(*tx.ToWalletID)
 		}
+
+		direction = "incoming"
 	}
 
 	coinName := strings.ToLower(tx.FromWallet.Coin.ShortName)
@@ -131,7 +136,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 	return &View{
 		ID:        ToIdView(tx.ID),
 		WalletID:  walletID,
-		Direction: map[bool]string{true: "outgoing", false: "incoming"}[isOutgoing],
+		Direction: direction,
 		Status:    tx.Status.Name,
 		Coin:      coinName,
 		Recipient: recipient,
