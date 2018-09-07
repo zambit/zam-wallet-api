@@ -1,18 +1,19 @@
 package users
 
 import (
+	"context"
 	"git.zam.io/wallet-backend/common/pkg/merrors"
 	"git.zam.io/wallet-backend/wallet-api/internal/isc/handlers/base"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets"
+	"git.zam.io/wallet-backend/wallet-api/internal/wallets/errs"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
+	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"git.zam.io/wallet-backend/web-api/db"
 	"git.zam.io/wallet-backend/web-api/pkg/services/broker"
-	"github.com/sirupsen/logrus"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
-	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
 	"github.com/pkg/errors"
-	"context"
+	"github.com/sirupsen/logrus"
 )
 
 const componentName = "isc.users.handlers"
@@ -53,7 +54,7 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 		}
 
 		// query already created wallets
-		wts, _, _, err := api.GetWallets(ctx, params.UserPhone, "", 0, 0)
+		wts, _, _, err := queries.GetWallets(d, queries.GetWalletFilters{UserPhone: params.UserPhone})
 		if err != nil {
 			trace.LogErrorWithMsg(span, err, "user wallets query failed")
 			return
@@ -71,9 +72,14 @@ func RegistrationCompletedFactory(d *db.Db, api *wallets.Api, logger logrus.Fiel
 			// force default wallet name
 			_, cErr := api.CreateWallet(ctx, params.UserPhone, c.ShortName, "")
 			if cErr != nil {
-				span.LogKV("coin_name", c.ShortName)
-				trace.LogErrorWithMsg(span, cErr, "wallet creation failed")
-				err = merrors.Append(err, cErr)
+				if cErr == errs.ErrWalletCreationRejected {
+					// TODO wrong behaviour, if user wallet for this coin already exists, should not be called
+					trace.LogMsgf(span, `wallet for "%s" user already created`, c.ShortName)
+				} else {
+					span.LogKV("coin_name", c.ShortName)
+					trace.LogErrorWithMsg(span, cErr, "wallet creation failed")
+					err = merrors.Append(err, cErr)
+				}
 			}
 		}
 

@@ -281,7 +281,7 @@ func joinFromWalletsOnce(ctx filterCtx) (nCtx filterCtx) {
 	nCtx = ctx
 
 	if !ctx.fromWalletsJoined {
-		nCtx.q = nCtx.q.Joins("inner join wallets on txs.from_wallet_id = wallets.id")
+		nCtx.q = nCtx.q.Joins("left outer join wallets on txs.from_wallet_id = wallets.id")
 		nCtx.fromWalletsJoined = true
 	}
 	return
