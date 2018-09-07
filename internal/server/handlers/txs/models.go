@@ -123,7 +123,13 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 
 		direction = "outgoing"
 	} else {
-		sender = tx.FromWallet.UserPhone
+		if tx.IsExternal() {
+			// leave this field empty for external txs because we don't track such info :(
+			sender = ""
+		} else {
+			sender = tx.FromWallet.UserPhone
+		}
+
 		if tx.ToWalletID != nil {
 			walletID = wallets.GetWalletIDView(*tx.ToWalletID)
 		}
@@ -131,7 +137,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		direction = "incoming"
 	}
 
-	coinName := strings.ToLower(tx.FromWallet.Coin.ShortName)
+	coinName := strings.ToLower(tx.CoinName())
 	rate.CoinCurrency = coinName
 	return &View{
 		ID:        ToIdView(tx.ID),
@@ -217,16 +223,15 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 				*ToView(
 					&tx,
 					userPhone,
-					rates.ForCoinCurrency(tx.FromWallet.Coin.ShortName),
+					rates.ForCoinCurrency(tx.CoinName()),
 				),
 			)
 
 			// calc total fiat sum depending on tx direction
 			// not counts txs which is can be spent againt
 			if tx.IsHoldsAmount() {
-				isOutgoing := tx.FromWallet.UserPhone == userPhone
-				txFiatAmount := rates.CurrencyRate(tx.FromWallet.Coin.ShortName).Convert(tx.Amount.V)
-				if !isOutgoing {
+				txFiatAmount := rates.CurrencyRate(tx.CoinName()).Convert(tx.Amount.V)
+				if !tx.IsOutgoingForSide(userPhone) {
 					groupFiatTotal.Add(groupFiatTotal, txFiatAmount)
 				} else {
 					groupFiatTotal.Sub(groupFiatTotal, txFiatAmount)
@@ -260,7 +265,7 @@ func ToAllView(txs []processing.Tx, userPhone string, rates common.AdditionalRat
 	res := make([]View, len(txs))
 	for i, tx := range txs {
 		// ToView return should not escape
-		res[i] = *ToView(&tx, userPhone, rates.ForCoinCurrency(tx.FromWallet.Coin.ShortName))
+		res[i] = *ToView(&tx, userPhone, rates.ForCoinCurrency(tx.CoinName()))
 	}
 	return res
 }

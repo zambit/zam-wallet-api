@@ -146,7 +146,7 @@ func validateTxState(
 		return
 	}
 
-	coinName := tx.FromWallet.Coin.ShortName
+	coinName := tx.CoinName()
 	amount := tx.Amount.V
 
 	// forbid self transactions

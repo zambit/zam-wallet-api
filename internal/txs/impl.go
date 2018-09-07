@@ -117,6 +117,8 @@ func addTxPreloads(q *gorm.DB) *gorm.DB {
 	).Preload(
 		"ToWallet",
 	).Preload(
+		"ToWallet.Coin",
+	).Preload(
 		"Status",
 	)
 }

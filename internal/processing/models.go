@@ -63,8 +63,15 @@ func (Tx) TableName() string {
 func (tx *Tx) CoinName() string {
 	if tx.FromWallet != nil {
 		return tx.FromWallet.Coin.ShortName
+	} else if tx.ToWallet != nil {
+		return tx.ToWallet.Coin.ShortName
 	}
 	return "<unknown>"
+}
+
+// IsExternal
+func (tx *Tx) IsExternal() bool {
+	return tx.Type == TxTypeExternal
 }
 
 // StateName returns actual state name or validate for freshly created tx

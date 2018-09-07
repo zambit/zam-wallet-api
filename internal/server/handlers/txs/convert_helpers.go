@@ -25,11 +25,11 @@ func getRateForTx(
 
 	err = trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
 		span.LogKV("convert_to", dstFiatCurrency)
-		span.LogKV("convert_from", tx.FromWallet.Coin.ShortName)
+		span.LogKV("convert_from", tx.CoinName())
 
 		// query rate with fallback currency
 		rate, err := convert.GetRateDefaultFiat(
-			converter, ctx, tx.FromWallet.Coin.ShortName, dstFiatCurrency, common.DefaultFiatCurrency,
+			converter, ctx, tx.CoinName(), dstFiatCurrency, common.DefaultFiatCurrency,
 		)
 		if err != nil {
 			return err
@@ -62,7 +62,7 @@ func getRatesForTxs(
 				// create a set of presented coins
 				coinsSet := make(map[string]struct{})
 				for _, tx := range txs {
-					coinsSet[tx.FromWallet.Coin.ShortName] = struct{}{}
+					coinsSet[tx.CoinName()] = struct{}{}
 				}
 				if additionalCoinCurrency != "" {
 					coinsSet[strings.ToUpper(additionalCoinCurrency)] = struct{}{}
