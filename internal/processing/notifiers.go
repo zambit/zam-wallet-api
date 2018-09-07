@@ -136,14 +136,14 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 	// update txs statuses for confirmed transactions
 	err = db.TransactionCtx(ctx, notifier.database, func(ctx context.Context, dbTx *gorm.DB) error {
 		// update confirmed transactions statuses
-		if len(pendingExternalTxs) == 0 {
+		if len(confirmedTxsIDs) != 0 {
 			err = updateTxsStatus(dbTx, confirmedTxsIDs, TxStateProcessed)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(abandonedTxsIDs) == 0 {
+		if len(abandonedTxsIDs) != 0 {
 			err = updateTxsStatus(dbTx, abandonedTxsIDs, TxStateDeclined)
 			if err != nil {
 				return err
