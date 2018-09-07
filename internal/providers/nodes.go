@@ -3,6 +3,7 @@ package providers
 import (
 	walletconf "git.zam.io/wallet-backend/wallet-api/config/wallets"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 )
 
@@ -14,6 +15,11 @@ func Coordinator(wConf walletconf.Scheme, logger logrus.FieldLogger) (coordinato
 		switch coinName {
 		case "btc", "bch":
 			additionalParams = generateBTCNodeAdditionalParams(wConf.BTC)
+		case "eth":
+			additionalParams, err = generateETHNodeAdditionalParams(wConf.ETH)
+			if err != nil {
+				return
+			}
 		}
 
 		logger.WithField(
@@ -35,4 +41,9 @@ func generateBTCNodeAdditionalParams(conf walletconf.BTCNodeConfiguration) map[s
 	return map[string]interface{}{
 		"confirmations_count": conf.NeedConfirmationsCount,
 	}
+}
+
+func generateETHNodeAdditionalParams(conf walletconf.ETHNodeConfiguration) (out map[string]interface{}, err error) {
+	err = mapstructure.Decode(&conf, &out)
+	return
 }

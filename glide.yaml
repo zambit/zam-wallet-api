@@ -29,3 +29,5 @@ import:
   version: v3.2
 - package: github.com/chonla/format
 - package: github.com/google/go-querystring
+- package: github.com/mitchellh/mapstructure
+  version: v1.0.0

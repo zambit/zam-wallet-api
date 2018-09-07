@@ -13,7 +13,23 @@ type NodeConnection struct {
 // BTCNodeConfiguration defines additional configuration values required for BTC-like nodes
 type BTCNodeConfiguration struct {
 	// NeedConfirmationsCount specifies number of confirmations which is required to treat a tx as confirmed
+	//
+	// Default values is 6
 	NeedConfirmationsCount int
+}
+
+// ETHNodeConfiguration defines additional configuration params required for ETH-like nodes
+type ETHNodeConfiguration struct {
+	// NeedConfirmationsCount specifies number of confirmations which is required to treat a tx as confirmed
+	//
+	// Default values is 12
+	NeedConfirmationsCount int
+
+	// EtherscanHost and EtherscanApiKey specifies etherscan params, there is no default values!
+	EtherscanHost, EtherscanApiKey string
+
+	// MasterPass used to unlock wallets
+	MasterPass string
 }
 
 type Scheme struct {
@@ -22,4 +38,7 @@ type Scheme struct {
 
 	// BTC holds additional BTC-like node configuration values
 	BTC BTCNodeConfiguration
+
+	// ETH holds additional ETH-like node configuration values
+	ETH ETHNodeConfiguration
 }

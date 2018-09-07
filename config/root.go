@@ -46,4 +46,5 @@ func Init(v *viper.Viper) {
 	v.SetDefault("JaegerConfig.Sampler.Param", 1)
 
 	v.SetDefault("Wallets.BTC.NeedConfirmationsCount", 6)
+	v.SetDefault("Wallets.ETH.NeedConfirmationsCount", 12)
 }

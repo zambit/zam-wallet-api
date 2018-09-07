@@ -10,6 +10,7 @@ import (
 	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/btc"
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/dig"
@@ -54,6 +55,12 @@ func watcherMain(cfg config.RootScheme, coinName string) (err error) {
 
 	// provide notifier
 	utils.MustProvide(c, providers.ConfirmationsNotifier)
+
+	// configure logger
+	utils.MustInvoke(c, func(logger logrus.FieldLogger) {
+		l := logger.(*logrus.Logger)
+		l.SetLevel(logrus.DebugLevel)
+	})
 
 	// Run worker
 	utils.MustInvoke(c, func(coordinator nodes.ICoordinator, notifier processing.IConfirmationNotifier) error {

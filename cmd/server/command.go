@@ -9,6 +9,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/txs"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/btc"
+	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/eth"
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
 	"git.zam.io/wallet-backend/web-api/pkg/providers"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/static"

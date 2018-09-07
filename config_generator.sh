@@ -43,5 +43,11 @@ wallets:
             user: '$BCH_USER'
             pass: '$BCH_PASS'
             testnet: '$BCH_TESTNET'
-
+        eth:
+            host: '$ETH_HOST'
+            testnet: '$ETH_TESTNET'
+    ETH:
+       EtherscanHost: '$ETHSCAN_HOST'
+       EtherscanApiKey: '$ETHSCAN_KEY'
+       MasterPass: '$ETH_MASTERPASS'
 '
