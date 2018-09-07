@@ -162,7 +162,7 @@ func (u *bigIntJSONView) UnmarshalJSON(data []byte) error {
 // Balances returns wallet balance associated with given address using getreceivedbyaddress method
 func (n *btcNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
 	var inputBalance bigIntJSONView
-	err = n.doCall("getreceivedbyaddress", &inputBalance, address)
+	err = n.doCall("getreceivedbyaddress", &inputBalance, address, n.confirmationsCount)
 	if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
 		if rpcErr.Code == rpcErrInvalidAddressCode {
 			err = nodes.ErrAddressInvalid
