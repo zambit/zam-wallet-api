@@ -91,6 +91,7 @@ var _ = Describe("testing txs processing", func() {
 
 	BeforeEachCProvide(func() (nodes.ICoordinator, *mocks.ICoordinator) {
 		c := &mocks.ICoordinator{}
+		c.GetTxsSender(testCoinName).SetSupportInternalTxs(true)
 		return c, c
 	})
 
@@ -103,7 +104,7 @@ var _ = Describe("testing txs processing", func() {
 		d *gorm.DB, notificator isc.ITxsEventNotificator, coordinator nodes.ICoordinator,
 	) (processing.IApi, helpers.IBalance) {
 		balanceHelper := balance.New(coordinator, nil)
-		p := processing.New(d, balanceHelper, notificator)
+		p := processing.New(d, balanceHelper, notificator, coordinator)
 		balanceHelper.ProcessingApi = p
 		return p, balanceHelper
 	})
@@ -146,7 +147,7 @@ var _ = Describe("testing txs processing", func() {
 			ItD(
 				"should reject negative amount and not create db record",
 				func(d *gorm.DB, s sourceWallet, r recipientWallet, p processing.IApi) {
-					tx, err := p.SendInternal(
+					tx, err := p.Send(
 						context.Background(),
 						(*queries.Wallet)(&s),
 						processing.NewWalletRecipient((*queries.Wallet)(&r)),
@@ -167,7 +168,7 @@ var _ = Describe("testing txs processing", func() {
 			ItD(
 				"should reject zero amount and not create db record",
 				func(d *gorm.DB, s sourceWallet, r recipientWallet, p processing.IApi) {
-					tx, err := p.SendInternal(
+					tx, err := p.Send(
 						context.Background(),
 						(*queries.Wallet)(&s),
 						processing.NewWalletRecipient((*queries.Wallet)(&r)),
@@ -223,7 +224,7 @@ var _ = Describe("testing txs processing", func() {
 								s.Address, new(decimal.Big).SetFloat64(Bw),
 							)
 
-							tx, err := p.SendInternal(
+							tx, err := p.Send(
 								context.Background(),
 								(*queries.Wallet)(&s),
 								processing.NewWalletRecipient((*queries.Wallet)(&r)),
@@ -291,7 +292,7 @@ var _ = Describe("testing txs processing", func() {
 				totalBalanceBefore = totalBalanceBefore.Add(aBal, bBal)
 
 				// send A -> B 60 coins
-				_, err = p.SendInternal(context.Background(), a, processing.NewWalletRecipient(b), new(decimal.Big).SetFloat64(60))
+				_, err = p.Send(context.Background(), a, processing.NewWalletRecipient(b), new(decimal.Big).SetFloat64(60))
 				Expect(err).NotTo(HaveOccurred())
 
 				// check balances
@@ -339,11 +340,11 @@ var _ = Describe("testing txs processing", func() {
 				totalBalanceBefore = new(decimal.Big).Add(aBal, new(decimal.Big).Add(bBal, cBal))
 
 				// send A -> B 35 coins
-				_, err = p.SendInternal(context.Background(), a, processing.NewWalletRecipient(b), new(decimal.Big).SetFloat64(35))
+				_, err = p.Send(context.Background(), a, processing.NewWalletRecipient(b), new(decimal.Big).SetFloat64(35))
 				Expect(err).NotTo(HaveOccurred())
 
 				// send A -> C 40 coins
-				_, err = p.SendInternal(context.Background(), a, processing.NewWalletRecipient(c), new(decimal.Big).SetFloat64(40))
+				_, err = p.Send(context.Background(), a, processing.NewWalletRecipient(c), new(decimal.Big).SetFloat64(40))
 				Expect(err).NotTo(HaveOccurred())
 
 				// check balances
@@ -391,7 +392,7 @@ var _ = Describe("testing txs processing", func() {
 				totalBalanceBefore = totalBalanceBefore.Add(aBal, bBal)
 
 				// send A -> B 60 coins
-				_, err = p.SendInternal(context.Background(), a, processing.NewWalletRecipient(b), new(decimal.Big).SetFloat64(60))
+				_, err = p.Send(context.Background(), a, processing.NewWalletRecipient(b), new(decimal.Big).SetFloat64(60))
 				Expect(err).NotTo(HaveOccurred())
 
 				// check balances
@@ -410,7 +411,7 @@ var _ = Describe("testing txs processing", func() {
 				Expect(totalBalanceAfterAtoBTx.Cmp(totalBalanceBefore)).To(Equal(0))
 
 				// send B -> A 60 coins
-				_, err = p.SendInternal(context.Background(), b, processing.NewWalletRecipient(a), new(decimal.Big).SetFloat64(35))
+				_, err = p.Send(context.Background(), b, processing.NewWalletRecipient(a), new(decimal.Big).SetFloat64(35))
 				Expect(err).NotTo(HaveOccurred())
 
 				// check balances
@@ -458,11 +459,11 @@ var _ = Describe("testing txs processing", func() {
 				totalBalanceBefore = new(decimal.Big).Add(aBal, new(decimal.Big).Add(bBal, cBal))
 
 				// send A -> C 35 coins
-				_, err = p.SendInternal(context.Background(), a, processing.NewWalletRecipient(c), new(decimal.Big).SetFloat64(35))
+				_, err = p.Send(context.Background(), a, processing.NewWalletRecipient(c), new(decimal.Big).SetFloat64(35))
 				Expect(err).NotTo(HaveOccurred())
 
 				// send B -> C 40 coins
-				_, err = p.SendInternal(context.Background(), b, processing.NewWalletRecipient(c), new(decimal.Big).SetFloat64(40))
+				_, err = p.Send(context.Background(), b, processing.NewWalletRecipient(c), new(decimal.Big).SetFloat64(40))
 				Expect(err).NotTo(HaveOccurred())
 
 				// check balances
@@ -494,7 +495,7 @@ var _ = Describe("testing txs processing", func() {
 				coordinator.GetWalletObserver(testCoinName).SetAddressBalance(a.Address, new(decimal.Big).SetFloat64(100))
 				coordinator.GetAccountObserver(testCoinName).SetAccountBalance(new(decimal.Big).SetFloat64(100))
 
-				_, err := p.SendInternal(context.Background(), a, processing.NewWalletRecipient(a), new(decimal.Big).SetFloat64(50))
+				_, err := p.Send(context.Background(), a, processing.NewWalletRecipient(a), new(decimal.Big).SetFloat64(50))
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("processing: self-tx forbidden"))
 			},

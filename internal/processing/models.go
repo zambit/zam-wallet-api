@@ -27,6 +27,7 @@ const (
 // Tx states
 const (
 	TxStateValidate           = "validation"
+	TxStateExternalSending    = "send_external"
 	TxStateDeclined           = "decline"
 	TxStateCanceled           = "cancel"
 	TxStateAwaitRecipient     = "pending"
@@ -50,6 +51,7 @@ type Tx struct {
 	Amount *postgres.Decimal
 
 	CreatedAt time.Time
+	UpdatedAt time.Time
 
 	StatusID int64
 	Status   *TxStatus `gorm:"foreignkey:StatusID;association_autoupdate:false;association_autocreate:false"`
@@ -132,7 +134,7 @@ func (tx *Tx) IsSelfTx() bool {
 type TxExternal struct {
 	ID        int64
 	TxID      int64
-	Tx        *Tx `gorm:"foreignkey:TxID;association_autocreate:false"`
+	Tx        *Tx `gorm:"foreignkey:TxID;association_autocreate:false;association_autoupdate:false"`
 	Hash      string
 	Recipient string
 }

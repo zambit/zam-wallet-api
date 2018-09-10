@@ -39,13 +39,13 @@ func (_m *ICoordinator) Close() error {
 	return r0
 }
 
-// Dial provides a mock function with given fields: coinName, host, user, pass, testnet
-func (_m *ICoordinator) Dial(coinName string, host string, user string, pass string, testnet bool) error {
-	ret := _m.Called(coinName, host, user, pass, testnet)
+// Dial provides a mock function with given fields: coinName, host, user, pass, testnet, additionalParams
+func (_m *ICoordinator) Dial(coinName string, host string, user string, pass string, testnet bool, additionalParams map[string]interface{}) error {
+	ret := _m.Called(coinName, host, user, pass, testnet, additionalParams)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string, string, string, bool) error); ok {
-		r0 = rf(coinName, host, user, pass, testnet)
+	if rf, ok := ret.Get(0).(func(string, string, string, string, bool, map[string]interface{}) error); ok {
+		r0 = rf(coinName, host, user, pass, testnet, additionalParams)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -99,4 +99,43 @@ func (_m *ICoordinator) TxsObserver(coinName string) nodes.ITxsObserver {
 	}
 
 	return r0
+}
+
+// TxsSender provides a mock function with given fields: coinName
+func (_m *ICoordinator) TxsSender(coinName string) nodes.ITxSender {
+	ret := _m.Called(coinName)
+
+	var r0 nodes.ITxSender
+	if rf, ok := ret.Get(0).(func(string) nodes.ITxSender); ok {
+		r0 = rf(coinName)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(nodes.ITxSender)
+		}
+	}
+
+	return r0
+}
+
+// WatcherLoop provides a mock function with given fields: coinName
+func (_m *ICoordinator) WatcherLoop(coinName string) (nodes.IWatcherLoop, error) {
+	ret := _m.Called(coinName)
+
+	var r0 nodes.IWatcherLoop
+	if rf, ok := ret.Get(0).(func(string) nodes.IWatcherLoop); ok {
+		r0 = rf(coinName)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(nodes.IWatcherLoop)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(coinName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }

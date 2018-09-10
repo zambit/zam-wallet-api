@@ -36,6 +36,7 @@ type btcNode struct {
 var _ nodes.IGenerator = (*btcNode)(nil)
 var _ nodes.IWalletObserver = (*btcNode)(nil)
 var _ nodes.IAccountObserver = (*btcNode)(nil)
+var _ nodes.ITxSender = (*btcNode)(nil)
 var _ nodes.ITxsObserver = (*btcNode)(nil)
 var _ nodes.IWatcherLoop = (*btcNode)(nil)
 
@@ -199,6 +200,11 @@ func (n *btcNode) Send(
 		}
 	}
 	return
+}
+
+// SupportInternalTxs btc supports internal txs
+func (n *btcNode) SupportInternalTxs() bool {
+	return true
 }
 
 // IsConfirmed gets number of tx confirmations using gettransaction rpc method and decides if tx confirmed or not

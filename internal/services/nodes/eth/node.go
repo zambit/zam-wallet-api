@@ -336,14 +336,16 @@ func (node *ethNode) Send(ctx context.Context, fromAddress, toAddress string, am
 		ctx,
 		"eth_sendTransaction",
 		&txHash,
-		&struct {
-			From  string      `json:"from"`
-			To    string      `json:"to"`
-			Value hexutil.Big `json:"value"`
-		}{
-			From:  fromAddress,
-			To:    toAddress,
-			Value: hexutil.Big(outAmount),
+		[]interface{}{
+			struct {
+				From  string      `json:"from"`
+				To    string      `json:"to"`
+				Value hexutil.Big `json:"value"`
+			}{
+				From:  fromAddress,
+				To:    toAddress,
+				Value: hexutil.Big(outAmount),
+			},
 		},
 	)
 	return
@@ -354,6 +356,11 @@ func (node *ethNode) getBestBlockIndex(ctx context.Context) (index int, err erro
 	err = node.doRPCCall(ctx, "eth_blockNumber", &indexRes)
 	index = int(indexRes)
 	return
+}
+
+// SupportInternalTxs eth doesn't supports internal txs
+func (node *ethNode) SupportInternalTxs() bool {
+	return false
 }
 
 func (node *ethNode) foreachAddress(
@@ -489,11 +496,11 @@ func coerceErr(err error) error {
 }
 
 func convertToWei(amount *decimal.Big) *decimal.Big {
-	return amount.SetScale(amount.Scale() - weiOrderOfNumber)
+	return new(decimal.Big).Set(amount).SetScale(amount.Scale() - weiOrderOfNumber)
 }
 
 func convertToEth(amount *decimal.Big) *decimal.Big {
-	return amount.SetScale(amount.Scale() + weiOrderOfNumber)
+	return new(decimal.Big).Set(amount).SetScale(amount.Scale() + weiOrderOfNumber)
 }
 
 // register dialer

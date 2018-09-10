@@ -89,7 +89,7 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 	}()
 
 	for _, tx := range pendingExternalTxs {
-		go func(tx *TxExternal) {
+		go func(tx TxExternal) {
 			defer wg.Done()
 
 			// query tx confirmation status
@@ -98,7 +98,7 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 			)
 			if err != nil {
 				resChan <- queryRes{
-					txId: tx.ID,
+					txId: tx.TxID,
 					err:  errors.Wrap(err, "error occurs while getting confirmations"),
 				}
 				return
@@ -108,7 +108,7 @@ func (notifier *ConfirmationNotifier) watchConfirmations(ctx context.Context, co
 				confirmed: confirmed,
 				abandoned: adandoned,
 			}
-		}(&tx)
+		}(tx)
 	}
 
 	// gather results and errors
@@ -166,7 +166,7 @@ func updateTxsStatus(dbTx *gorm.DB, ids []int64, newStatusName string) error {
 	}
 
 	return dbTx.Model(&Tx{}).Where(
-		"id = ANY ($2::bigint[])", pq.Array(ids),
+		"id = ANY (?::bigint[])", pq.Array(ids),
 	).Update("StatusID", stateModel.ID).Error
 }
 

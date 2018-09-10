@@ -254,8 +254,9 @@ func (api *Api) SendToPhone(
 		}
 
 		var (
-			fromWallet     queries.Wallet
-			recipientDescr processing.InternalTxRecipient
+			fromWallet   queries.Wallet
+			candidate    processing.TxRecipientCandidate
+			fbCandidates []processing.TxRecipientCandidate
 		)
 		err = api.database.Tx(func(tx db.ITx) (err error) {
 			// query source wallet
@@ -277,10 +278,11 @@ func (api *Api) SendToPhone(
 
 			switch len(wts) {
 			case 0:
-				recipientDescr = processing.NewPhoneRecipient(toUserPhone)
+				candidate = processing.NewPhoneRecipient(toUserPhone)
 				trace.LogMsg(span, "sending by phone due to recipient wallet not found")
 			case 1:
-				recipientDescr = processing.NewWalletRecipient(&wts[0])
+				candidate = processing.NewWalletRecipient(&wts[0])
+				fbCandidates = append(fbCandidates, processing.NewAddressRecipient(wts[0].Address))
 				span.LogKV("dst_wallet_id", wts[0].ID)
 				trace.LogMsg(span, "sending to dst wallet")
 			default:
@@ -295,9 +297,15 @@ func (api *Api) SendToPhone(
 			return err
 		}
 
-		return trace.InsideSpanE(ctx, "internal_sending", func(ctx context.Context, span opentracing.Span) error {
+		return trace.InsideSpanE(ctx, "sending", func(ctx context.Context, span opentracing.Span) error {
 			var sendErr error
-			newTx, sendErr = api.processingApi.SendInternal(ctx, &fromWallet, recipientDescr, amount)
+			newTx, sendErr = api.processingApi.Send(
+				ctx,
+				&fromWallet,
+				candidate,
+				amount,
+				fbCandidates...,
+			)
 			return sendErr
 		})
 	})
@@ -313,11 +321,7 @@ func (api *Api) SentToAddress(
 	amount *decimal.Big,
 ) (newTx *processing.Tx, err error) {
 	err = trace.InsideSpanE(ctx, "send_to_address", func(ctx context.Context, span opentracing.Span) error {
-		var (
-			fromWallet     queries.Wallet
-			sendInternally bool
-			sendToWallet   queries.Wallet
-		)
+		var fromWallet queries.Wallet
 
 		span.LogKV("user_phone", userPhone, "wallet_id", walletID, "to_address", toAddress, "amount", amount)
 
@@ -332,6 +336,10 @@ func (api *Api) SentToAddress(
 			return errs.ErrNonPositiveAmount
 		}
 
+		// decide recipient type: if an a wallet of such coin and destination address exists, hint suggest processing
+		// to use that
+		recipient := processing.NewAddressRecipient(toAddress)
+		var fbRecipients []processing.TxRecipientCandidate
 		err = api.database.Tx(func(tx db.ITx) error {
 			var err error
 			// query source wallet
@@ -342,6 +350,7 @@ func (api *Api) SentToAddress(
 
 			// first we need to check is that address belongs to some recipientWallet in the system so this transaction
 			// will be sent internally
+			// TODO this decision must be made inside processing but currently due to DDD principe this check stay here
 			wts, _, _, err := queries.GetWallets(
 				tx,
 				queries.GetWalletFilters{ByCoin: fromWallet.Coin.ShortName, ByAddress: toAddress},
@@ -349,34 +358,22 @@ func (api *Api) SentToAddress(
 			if err != nil {
 				return err
 			}
+
 			// if some wallets found, use them to send internal tx
 			if len(wts) > 0 {
-				sendInternally = true
-				sendToWallet = wts[0]
-				// don't allow self txs
-				if sendToWallet.UserPhone == userPhone {
+				span.LogKV("to_wallet_id", wts[0].ID, "to_wallet_user_phone", wts[0].UserPhone)
+				if wts[0].UserPhone == userPhone {
 					return errs.ErrSelfTxForbidden
 				}
+				recipient = processing.NewWalletRecipient(&wts[0])
+				// also provide fallback address recipients
+				fbRecipients = append(fbRecipients, processing.NewAddressRecipient(toAddress))
 			}
 			return nil
 		})
-
-		// make internal send if such decision has been made
-		if sendInternally {
-			return trace.InsideSpanE(ctx, "internal_sending", func(ctx context.Context, span opentracing.Span) error {
-				span.LogKV("to_wallet_id", sendToWallet.ID, "to_wallet_user_phone", sendToWallet.UserPhone)
-				var sendErr error
-				newTx, sendErr = api.processingApi.SendInternal(
-					ctx, &fromWallet, processing.NewWalletRecipient(&sendToWallet), amount,
-				)
-				return sendErr
-			})
-		}
-
-		return trace.InsideSpanE(ctx, "external_sending", func(ctx context.Context, span opentracing.Span) error {
-			span.LogKV("to_address", toAddress)
+		return trace.InsideSpanE(ctx, "sending", func(ctx context.Context, span opentracing.Span) error {
 			var sendErr error
-			newTx, sendErr = api.processingApi.SendExternal(ctx, &fromWallet, toAddress, amount)
+			newTx, sendErr = api.processingApi.Send(ctx, &fromWallet, recipient, amount, fbRecipients...)
 			return sendErr
 		})
 	})

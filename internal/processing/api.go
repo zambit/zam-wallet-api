@@ -43,42 +43,44 @@ type InternalTxRecipientType int
 const (
 	InternalTxWalletRecipient = iota
 	InternalTxPhoneRecipient
+	InternalTxAddressRecipient
 )
 
-// InternalTxRecipient describes recipient
-type InternalTxRecipient struct {
-	t      InternalTxRecipientType
-	phone  string
-	wallet *queries.Wallet
+// TxRecipientCandidate describes recipient candidate either with wallet id, or with phone number or with
+// blockchain address
+type TxRecipientCandidate struct {
+	t       InternalTxRecipientType
+	phone   string
+	address string
+	wallet  *queries.Wallet
 }
 
 // NewPhoneRecipient sets recipient by phone number (for non-existing recipient wallets)
-func NewPhoneRecipient(phone string) InternalTxRecipient {
-	return InternalTxRecipient{t: InternalTxPhoneRecipient, phone: phone}
+func NewPhoneRecipient(phone string) TxRecipientCandidate {
+	return TxRecipientCandidate{t: InternalTxPhoneRecipient, phone: phone}
 }
 
 // NewWalletRecipient sets recipient by wallet
-func NewWalletRecipient(wallet *queries.Wallet) InternalTxRecipient {
-	return InternalTxRecipient{t: InternalTxWalletRecipient, wallet: wallet}
+func NewWalletRecipient(wallet *queries.Wallet) TxRecipientCandidate {
+	return TxRecipientCandidate{t: InternalTxWalletRecipient, wallet: wallet}
+}
+
+// NewWalletRecipient sets recipient by address
+func NewAddressRecipient(address string) TxRecipientCandidate {
+	return TxRecipientCandidate{t: InternalTxAddressRecipient, address: address}
 }
 
 // IApi represents wallet transaction operations and implements simplified processing center, which able to
 // process internal transactions, track their states and waits until specific user creates wallet.
 type IApi interface {
-	// SendInternal
-	SendInternal(
+	// Send amount of coins from wallet to destination described with recipient info. Processing take the job to decide
+	// which recipient candidate should be used to perform transaction with minimal cost.
+	Send(
 		ctx context.Context,
 		wallet *queries.Wallet,
-		recipient InternalTxRecipient,
+		recipient TxRecipientCandidate,
 		amount *decimal.Big,
-	) (newTx *Tx, err error)
-
-	// SendExternal
-	SendExternal(
-		ctx context.Context,
-		wallet *queries.Wallet,
-		address string,
-		amount *decimal.Big,
+		fallbackCandidate ...TxRecipientCandidate,
 	) (newTx *Tx, err error)
 
 	// GetTxsesSum get sum of outgoing and incoming transactions for specified wallet
@@ -112,87 +114,17 @@ func New(
 	}
 }
 
-// SendByPhone implements IApi interface
-func (api *Api) SendInternal(
-	ctx context.Context,
-	wallet *queries.Wallet,
-	recipient InternalTxRecipient,
-	amount *decimal.Big,
-) (newTx *Tx, err error) {
-	span, ctx := StartSpanFromContext(ctx, "send_internal")
-	defer span.Finish()
-
-	span.LogKV(
-		"from_wallet_id", wallet.ID,
-		"to_wallet_id", recipient.wallet,
-		"to_phone", recipient.phone,
-		"coin", wallet.Coin.ShortName,
-		"amount", amount,
-	)
-
-	// check most common amount errors
-	err = checkAmount(amount)
-	if err != nil {
-		return
-	}
-
-	var validationErrs error
-	err = db.TransactionCtx(ctx, api.database, func(ctx context.Context, dbTx *gorm.DB) error {
-		// query status explicitly, no clear way with gorm :(
-		var stateModel TxStatus
-		err = dbTx.Model(&stateModel).Where("name = ?", TxStateValidate).First(&stateModel).Error
-		if err != nil {
-			return err
-		}
-
-		// create new wallet
-		pTx := &Tx{
-			FromWallet: wallet,
-			Type:       TxTypeInternal,
-			Amount:     &postgres.Decimal{V: amount},
-			Status:     &stateModel,
-		}
-		// fill tx fields depending on recipient type
-		switch recipient.t {
-		case InternalTxPhoneRecipient:
-			pTx.ToPhone = &recipient.phone
-		case InternalTxWalletRecipient:
-			pTx.ToWallet = recipient.wallet
-		}
-		err = dbTx.Create(pTx).Error
-		if err != nil {
-			return err
-		}
-
-		newTx = pTx
-		span.LogKV("new_tx_id", newTx.ID)
-
-		// preform steps
-		newTx, validationErrs, err = StepTx(ctx, dbTx, newTx, api.createExternalResources())
-
-		return err
-	})
-	if err != nil {
-		trace.LogError(span, err)
-	} else if validationErrs != nil {
-		// don't report as error
-		span.LogKV("validation_errs", validationErrs, "message", "validation errs occurs")
-		err = validationErrs
-	}
-	return
-}
-
 // SendExternal implements IApi interface
-func (api *Api) SendExternal(
+func (api *Api) Send(
 	ctx context.Context,
 	wallet *queries.Wallet,
-	address string,
+	candidate TxRecipientCandidate,
 	amount *decimal.Big,
+	fallbackCandidate ...TxRecipientCandidate,
 ) (newTx *Tx, err error) {
 	err = trace.InsideSpanE(ctx, "send_external", func(ctx context.Context, span Span) error {
 		span.LogKV(
 			"from_wallet_id", wallet.ID,
-			"to_address", address,
 			"coin", wallet.Coin.ShortName,
 			"amount", amount,
 		)
@@ -201,11 +133,6 @@ func (api *Api) SendExternal(
 		err := checkAmount(amount)
 		if err != nil {
 			return err
-		}
-
-		// check self tx
-		if wallet.Address == address {
-			return ErrSelfTxForbidden
 		}
 
 		var validationErrs error
@@ -217,12 +144,19 @@ func (api *Api) SendExternal(
 				return err
 			}
 
-			pTx := &Tx{
-				FromWallet: wallet,
-				Type:       TxTypeExternal,
-				Amount:     &postgres.Decimal{V: amount},
-				ToAddress:  &address,
-				Status:     &stateModel,
+			// create tx and appli first candidate
+			pTx := applyTxCandidate(
+				&Tx{
+					FromWallet: wallet,
+					Amount:     &postgres.Decimal{V: amount},
+					Status:     &stateModel,
+					Type:       TxTypeInternal,
+				},
+				candidate,
+			)
+			// apply next candidates
+			for _, c := range fallbackCandidate {
+				pTx = applyTxCandidate(pTx, c)
 			}
 
 			err = dbTx.Create(pTx).Error
@@ -242,6 +176,7 @@ func (api *Api) SendExternal(
 			return err
 		}
 		if validationErrs != nil {
+			trace.LogMsg(span, "validation errs occurs")
 			return validationErrs
 		}
 		return nil
@@ -376,6 +311,19 @@ func (api *Api) createExternalResources() *smResources {
 		TxEventNotificator: api.notificator,
 		Coordinator:        api.coordinator,
 	}
+}
+
+func applyTxCandidate(tx *Tx, candidate TxRecipientCandidate) *Tx {
+	// fill tx fields depending on candidate type
+	switch candidate.t {
+	case InternalTxPhoneRecipient:
+		tx.ToPhone = &candidate.phone
+	case InternalTxWalletRecipient:
+		tx.ToWallet = candidate.wallet
+	case InternalTxAddressRecipient:
+		tx.ToAddress = &candidate.address
+	}
+	return tx
 }
 
 // utils

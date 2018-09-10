@@ -37,30 +37,30 @@ func (b *Balance) TotalWalletBalanceCtx(ctx context.Context, wallet *queries.Wal
 	span.LogKV("wallet_id", wallet.ID, "coin", wallet.Coin.ShortName)
 
 	// query address balance using node service
-	var addressBalance *decimal.Big
 	trace.InsideSpan(ctx, "get_node_address_balance", func(ctx context.Context, span ot.Span) {
-		addressBalance, err = b.Coordinator.Observer(wallet.Coin.ShortName).Balance(ctx, wallet.Address)
-		span.LogKV("address_balance", addressBalance)
+		balance, err = b.Coordinator.Observer(wallet.Coin.ShortName).Balance(ctx, wallet.Address)
+		span.LogKV("address_balance", balance)
 	})
 	if err != nil {
 		return
 	}
 
-	// calculate sum of wallet txs
-	var txsSum *decimal.Big
-	trace.InsideSpan(ctx, "get_wallet_txs_sum", func(ctx context.Context, span ot.Span) {
-		txsSum, err = b.ProcessingApi.GetTxsesSum(ctx, wallet)
-		span.LogKV("txs_sum", txsSum)
-	})
-	if err != nil {
-		return
-	}
+	// sum internal transaction only if node supports internal transactions
+	if b.Coordinator.TxsSender(wallet.Coin.ShortName).SupportInternalTxs() {
+		// calculate sum of wallet txs
+		var txsSum *decimal.Big
+		trace.InsideSpan(ctx, "get_wallet_txs_sum", func(ctx context.Context, span ot.Span) {
+			txsSum, err = b.ProcessingApi.GetTxsesSum(ctx, wallet)
+			span.LogKV("txs_sum", txsSum)
+		})
+		if err != nil {
+			return
+		}
 
-	// get total balance
-	if txsSum != nil {
-		balance = new(decimal.Big).Add(addressBalance, txsSum)
-	} else {
-		balance = addressBalance
+		// get total balance
+		if txsSum != nil {
+			balance = new(decimal.Big).Add(balance, txsSum)
+		}
 	}
 
 	span.LogKV("balance", balance)
