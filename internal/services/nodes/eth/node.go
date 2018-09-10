@@ -421,7 +421,7 @@ func (node *ethNode) doESCall(
 ) error {
 	l := node.logger.WithField("es_module", module).WithField("es_action", action)
 
-	l.WithField("params", params).Debug("calling REST api")
+	l.WithField("params", params).Debug("making REST api call")
 
 	qVals := url.Values{}
 	qVals.Set("apikey", node.etherScanParams.apiKey)
@@ -437,7 +437,7 @@ func (node *ethNode) doESCall(
 	}
 	u.RawQuery = qVals.Encode()
 
-	l.WithField("url", u.String()).Debug("calling url")
+	l.WithField("url", u.String()).Debug("using url")
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
@@ -458,17 +458,17 @@ func (node *ethNode) doESCall(
 	}
 	err = json.NewDecoder(httpResp.Body).Decode(&resp)
 	if err != nil {
-		return wrapNodeErr(err)
+		return wrapNodeErr(err, "escan: decode")
 	}
 	if resp.Status == 0 {
 		// ignore no transactions found error
 		if resp.Message == "No transactions found" {
 			return nil
 		}
-		return wrapNodeErr(fmt.Errorf("response with '%s'", resp.Message))
+		return wrapNodeErr(fmt.Errorf("escan: response with '%s'", resp.Message))
 	}
 
-	return wrapNodeErr(json.Unmarshal(resp.Result, output))
+	return wrapNodeErr(json.Unmarshal(resp.Result, output), "escan: decode body")
 }
 
 func wrapNodeErr(err error, descr ...string) error {
