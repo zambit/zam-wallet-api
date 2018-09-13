@@ -1,6 +1,7 @@
 package txs
 
 import (
+	"git.zam.io/wallet-backend/common/pkg/types"
 	"git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/common"
@@ -39,13 +40,6 @@ type GetAllRequest struct {
 	Group     string  `form:"group"`
 }
 
-// UnixTimeView marshales into unix time format
-type UnixTimeView time.Time
-
-func (t *UnixTimeView) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt((*time.Time)(t).Unix(), 10)), nil
-}
-
 // View tx api representation
 type View struct {
 	ID        string                      `json:"id"`
@@ -58,7 +52,7 @@ type View struct {
 	Type      string                      `json:"type"`
 	Amount    common.MultiCurrencyBalance `json:"amount"`
 	Fee       common.MultiCurrencyBalance `json:"fee,omitempty"`
-	CreatedAt UnixTimeView                `json:"created_at"`
+	CreatedAt types.UnixTimeView          `json:"created_at"`
 }
 
 // SingleResponse single tx response
@@ -76,8 +70,8 @@ type MultipleResponse struct {
 
 // GroupView
 type GroupView struct {
-	StartDate    UnixTimeView                `json:"start_date"`
-	EndDate      UnixTimeView                `json:"end_date"`
+	StartDate    types.UnixTimeView          `json:"start_date"`
+	EndDate      types.UnixTimeView          `json:"end_date"`
 	TotalAmount  common.MultiCurrencyBalance `json:"total_amount"`
 	Transactions []View                      `json:"items"`
 }
@@ -155,7 +149,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		Type:      string(tx.Type),
 		Amount:    rate.RepresentBalance(tx.Amount.V),
 		Fee:       fee,
-		CreatedAt: UnixTimeView(tx.CreatedAt),
+		CreatedAt: types.UnixTimeView(tx.CreatedAt),
 	}
 }
 
@@ -256,8 +250,8 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 
 		// crete group
 		groups = append(groups, GroupView{
-			StartDate:    UnixTimeView(startG),
-			EndDate:      UnixTimeView(endG),
+			StartDate:    types.UnixTimeView(startG),
+			EndDate:      types.UnixTimeView(endG),
 			TotalAmount:  defaultCurrencyRate.RepresentBalance(groupDefaultCoinTotal),
 			Transactions: groupped,
 		})
