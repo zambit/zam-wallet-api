@@ -75,7 +75,7 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 	}
 	tx.Status = &stateModel
 	tx.StatusID = stateModel.ID
-	err = dbTx.Model(tx).Update("StatusID", stateModel.ID).Update("Type", tx.Type).Error
+	err = dbTx.Model(tx).Update(tx).Error
 	if err != nil {
 		return
 	}

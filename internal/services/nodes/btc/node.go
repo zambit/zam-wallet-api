@@ -213,7 +213,9 @@ func (n *btcNode) Send(
 	}
 	fee = new(decimal.Big)
 	for _, d := range resp.Details {
-		fee.Add(fee, (*decimal.Big)(d.Fee))
+		if d.Fee != nil {
+			fee.Add(fee, new(decimal.Big).Abs((*decimal.Big)(d.Fee)))
+		}
 	}
 
 	return

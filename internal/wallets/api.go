@@ -371,6 +371,11 @@ func (api *Api) SentToAddress(
 			}
 			return nil
 		})
+		if err != nil {
+			trace.LogErrorWithMsg(span, err, "error occurs before sending")
+			return err
+		}
+
 		return trace.InsideSpanE(ctx, "sending", func(ctx context.Context, span opentracing.Span) error {
 			var sendErr error
 			newTx, sendErr = api.processingApi.Send(ctx, &fromWallet, recipient, amount, fbRecipients...)
