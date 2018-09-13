@@ -144,11 +144,11 @@ func (api *Api) Send(
 				return err
 			}
 
-			// create tx and appli first candidate
+			// create tx and apply first candidate
 			pTx := applyTxCandidate(
 				&Tx{
 					FromWallet: wallet,
-					Amount:     &postgres.Decimal{V: amount},
+					Amount:     &Decimal{V: amount},
 					Status:     &stateModel,
 					Type:       TxTypeInternal,
 				},
@@ -192,7 +192,7 @@ const aggregateTxsesQuery = `with income as (select coalesce(sum(txs.amount), 0)
                 where to_wallet_id = $1 and
 					type = 'internal' and
                   	status_id in (select id from tx_statuses where name = 'success')),
-     outcome as (select coalesce(sum(txs.amount), 0) as val
+     outcome as (select coalesce(sum(txs.amount), 0) + coalesce(sum(txs.blockchain_fee), 0) as val
                  from txs
                  where from_wallet_id = $1 and
 					status_id not in 

@@ -57,6 +57,7 @@ type View struct {
 	Sender    string                      `json:"sender,omitempty"`
 	Type      string                      `json:"type"`
 	Amount    common.MultiCurrencyBalance `json:"amount"`
+	Fee       common.MultiCurrencyBalance `json:"fee,omitempty"`
 	CreatedAt UnixTimeView                `json:"created_at"`
 }
 
@@ -109,6 +110,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		recipient string
 		sender    string
 		direction string
+		fee       common.MultiCurrencyBalance
 	)
 	if tx.IsOutgoingForSide(userPhone) {
 		walletID = wallets.GetWalletIDView(tx.FromWalletID)
@@ -119,6 +121,9 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 			recipient = tx.ToWallet.UserPhone
 		case tx.SendByAddress():
 			recipient = *tx.ToAddress
+		}
+		if tx.BlockchainFee != nil {
+			fee = rate.RepresentBalance(tx.BlockchainFee.V)
 		}
 
 		direction = "outgoing"
@@ -149,6 +154,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		Sender:    sender,
 		Type:      string(tx.Type),
 		Amount:    rate.RepresentBalance(tx.Amount.V),
+		Fee:       fee,
 		CreatedAt: UnixTimeView(tx.CreatedAt),
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/services/isc"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/pkg/trace"
+	"github.com/ericlagergren/decimal"
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
@@ -142,10 +143,13 @@ func onSendExternalTx(
 		validateErrs = merrors.Append(validateErrs, ErrInsufficientFunds)
 	}
 
-	var txHash string
+	var (
+		txHash string
+		fee    *decimal.Big
+	)
 	err = trace.InsideSpanE(ctx, "sending_tx", func(ctx context.Context, span opentracing.Span) error {
 		var err error
-		txHash, err = res.Coordinator.TxsSender(tx.CoinName()).Send(
+		txHash, fee, err = res.Coordinator.TxsSender(tx.CoinName()).Send(
 			ctx, tx.FromWallet.Address, *tx.ToAddress, tx.Amount.V,
 		)
 		return err
@@ -169,6 +173,7 @@ func onSendExternalTx(
 	if err != nil {
 		return
 	}
+	tx.BlockchainFee = &Decimal{V: fee}
 
 	newState = TxStateAwaitConfirmations
 	return
@@ -184,7 +189,7 @@ func onValidateTxState(
 	defer span.Finish()
 
 	// validate tx properties
-	if tx.Amount == nil {
+	if tx.Amount.V == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx amount is missing"))
 	}
 	if tx.FromWallet == nil {
@@ -242,7 +247,7 @@ func onValidateTxState(
 		sendAddress
 	)
 	var (
-		sendDecision sendDecisionT
+		sendDecision    sendDecisionT
 		supportInternal = res.Coordinator.TxsSender(tx.CoinName()).SupportInternalTxs()
 	)
 	switch {

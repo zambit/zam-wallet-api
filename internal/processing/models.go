@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"database/sql/driver"
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"github.com/ericlagergren/decimal/sql/postgres"
 	"time"
@@ -35,6 +36,26 @@ const (
 	TxStateProcessed          = "success"
 )
 
+// Decimal is a PostgreSQL DECIMAL. Its zero value is valid for use with both
+// Value and Scan.
+type Decimal postgres.Decimal
+
+// Value implements driver.Valuer.
+func (d *Decimal) Value() (driver.Value, error) {
+	if d == nil {
+		return nil, nil
+	}
+	return (*postgres.Decimal)(d).Value()
+}
+
+// Scan implements sql.Scanner
+func (d *Decimal) Scan(src interface{}) error {
+	if d == nil {
+		return nil
+	}
+	return (*postgres.Decimal)(d).Scan(src)
+}
+
 // Tx represents database transaction row
 type Tx struct {
 	ID           int64
@@ -48,7 +69,8 @@ type Tx struct {
 	ToAddress  *string
 	ToPhone    *string
 
-	Amount *postgres.Decimal
+	BlockchainFee *Decimal
+	Amount        *Decimal
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

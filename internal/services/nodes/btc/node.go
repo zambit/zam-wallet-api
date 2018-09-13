@@ -192,13 +192,30 @@ func (n *btcNode) Send(
 	fromAddress,
 	toAddress string,
 	amount *decimal.Big,
-) (txHash string, err error) {
+) (txHash string, fee *decimal.Big, err error) {
 	err = n.doCall("sendtoaddress", &txHash, toAddress, amount)
 	if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
 		if rpcErr.Code == rpcErrInvalidAddressCode {
 			err = nodes.ErrAddressInvalid
 		}
 	}
+
+	// calculate the fee of new transaction
+	var resp struct {
+		Details []struct {
+			Fee *bigIntJSONView `json:"fee"`
+		} `json:"details"`
+	}
+	err = n.doCall("gettransaction", &resp, txHash)
+	if err != nil {
+		// should not broke the transaction sending if second request occurs error
+		return
+	}
+	fee = new(decimal.Big)
+	for _, d := range resp.Details {
+		fee.Add(fee, (*decimal.Big)(d.Fee))
+	}
+
 	return
 }
 
@@ -212,7 +229,7 @@ func (n *btcNode) SupportInternalTxs() bool {
 func (n *btcNode) IsConfirmed(ctx context.Context, hash string) (confirmed, abandoned bool, err error) {
 	var resp struct {
 		Confirmations int `json:"confirmations"`
-		Details []struct{
+		Details       []struct {
 			Abandoned bool `json:"abandoned"`
 		} `json:"details"`
 	}

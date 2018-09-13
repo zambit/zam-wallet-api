@@ -21,7 +21,7 @@ func getRateForTx(
 	if dstFiatCurrency == "" {
 		dstFiatCurrency = common.DefaultFiatCurrency
 	}
-	bRate = common.AdditionalRate{FiatCurrency: dstFiatCurrency}
+	bRate = common.AdditionalRate{FiatCurrency: dstFiatCurrency, CoinCurrency: tx.CoinName()}
 
 	err = trace.InsideSpanE(ctx, "converting_balance_to_fiat_currency", func(ctx context.Context, span ot.Span) error {
 		span.LogKV("convert_to", dstFiatCurrency)

@@ -435,6 +435,24 @@ components:
                 type: number
                 description: Amount in specified currency units
                 example: 100.12
+        fee:
+          type: object
+          description: >
+            Paid transaction fee in different units, one of them is the
+            transaction coin unit, second is either fiat system-default currency
+            (USD) or the currency which has been specified by `convert` query
+            parameter.
+          additionalProperties:
+            type: number
+            properties:
+              code:
+                type: string
+                description: 'Fiat currency or cypto-currency name, always in lower-case'
+                example: btc
+              text:
+                type: number
+                description: Amount in specified currency units
+                example: 100.12
       required:
         - id
         - wallet_id

@@ -68,7 +68,7 @@ type ethNode struct {
 }
 
 type configParams struct {
-	NeedConfirmationsCount int
+	NeedConfirmationsCount                     int
 	MasterPass, EtherscanHost, EtherscanApiKey string
 }
 
@@ -319,7 +319,7 @@ func (node *ethNode) GetIncoming(ctx context.Context) (txs []nodes.IncomingTxDes
 }
 
 // Send
-func (node *ethNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, err error) {
+func (node *ethNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, fee *decimal.Big, err error) {
 	// unlock wallet first
 	err = node.doRPCCall(ctx, "personal_unlockAccount", nil, fromAddress, node.getMasterPass())
 	if err != nil {
@@ -348,6 +348,23 @@ func (node *ethNode) Send(ctx context.Context, fromAddress, toAddress string, am
 			},
 		},
 	)
+	if err != nil {
+		return
+	}
+	var txDetails struct {
+		Gas      *hexutil.Big `json:"gas"`
+		GasPrice *hexutil.Big `json:"gasPrice"`
+	}
+	err = node.doRPCCall(ctx, "eth_getTransactionByHash", &txDetails, txHash)
+	if err != nil {
+		return
+	}
+
+	fee = new(decimal.Big).SetBigMantScale(
+		new(big.Int).Mul((*big.Int)(txDetails.Gas), (*big.Int)(txDetails.GasPrice)),
+		weiOrderOfNumber,
+	)
+
 	return
 }
 
@@ -504,7 +521,7 @@ func convertToEth(amount *decimal.Big) *decimal.Big {
 }
 
 // register dialer
-type provider struct {}
+type provider struct{}
 
 func (p provider) Dial(
 	logger logrus.FieldLogger,
