@@ -2,6 +2,7 @@ package common
 
 import (
 	"git.zam.io/wallet-backend/wallet-api/config"
+	processingconf "git.zam.io/wallet-backend/wallet-api/config/processing"
 	serverconf "git.zam.io/wallet-backend/wallet-api/config/server"
 	walletsconf "git.zam.io/wallet-backend/wallet-api/config/wallets"
 	internalproviders "git.zam.io/wallet-backend/wallet-api/internal/providers"
@@ -31,6 +32,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 		webserverconf.Scheme,
 		jconfig.Configuration,
 		webserverconf.NotificatorScheme,
+		processingconf.Scheme,
 	) {
 		servConf := cfg.Server
 		wservConf := webserverconf.Scheme{
@@ -41,7 +43,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 			Auth:    servConf.Auth,
 		}
 
-		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf, cfg.JaegerConfig, servConf.Notificator
+		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf, cfg.JaegerConfig, servConf.Notificator, cfg.Processing
 	})
 
 	// provide root logger

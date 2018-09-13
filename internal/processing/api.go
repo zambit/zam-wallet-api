@@ -104,13 +104,13 @@ func New(
 	db *gorm.DB,
 	balanceHelper helpers.IBalance,
 	notificator isc.ITxsEventNotificator,
-	cooddinator nodes.ICoordinator,
+	coordinator nodes.ICoordinator,
 ) IApi {
 	return &Api{
 		database:      db,
 		balanceHelper: balanceHelper,
 		notificator:   notificator,
-		coordinator:   cooddinator,
+		coordinator:   coordinator,
 	}
 }
 
@@ -295,7 +295,6 @@ func (api *Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wal
 			"Status",
 		).Find(&txsToUpdate).Error
 
-		// it's not good idea to transform all dependent transaction in single db transaction, need to elaborate...
 		for _, tx := range txsToUpdate {
 			// ignore validation errs, TODO should notify user
 			_, _, err = StepTx(ctx, dbTx, tx, api.createExternalResources())

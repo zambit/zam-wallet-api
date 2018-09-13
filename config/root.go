@@ -1,12 +1,14 @@
 package config
 
 import (
+	"git.zam.io/wallet-backend/wallet-api/config/processing"
 	"git.zam.io/wallet-backend/wallet-api/config/server"
 	"git.zam.io/wallet-backend/wallet-api/config/wallets"
 	"git.zam.io/wallet-backend/web-api/config/db"
 	"git.zam.io/wallet-backend/web-api/config/isc"
 	"github.com/spf13/viper"
 	jconfig "github.com/uber/jaeger-client-go/config"
+	"time"
 )
 
 // RootScheme is the scheme used by top-level app
@@ -22,6 +24,9 @@ type RootScheme struct {
 
 	// Wallets configuration
 	Wallets wallets.Scheme
+
+	// Processing configuration
+	Processing processing.Scheme
 
 	// ISC contains inter-process communication params
 	ISC isc.Scheme
@@ -47,4 +52,6 @@ func Init(v *viper.Viper) {
 
 	v.SetDefault("Wallets.BTC.NeedConfirmationsCount", 6)
 	v.SetDefault("Wallets.ETH.NeedConfirmationsCount", 12)
+
+	v.SetDefault("Processing.TimeToWaitRecipient", time.Hour*72)
 }

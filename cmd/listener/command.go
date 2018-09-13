@@ -1,23 +1,22 @@
-package worker
+package listener
 
 import (
 	"git.zam.io/wallet-backend/wallet-api/cmd/common"
 	"git.zam.io/wallet-backend/wallet-api/config"
-	"git.zam.io/wallet-backend/wallet-api/internal/processing"
-	"git.zam.io/wallet-backend/wallet-api/internal/providers"
+	"git.zam.io/wallet-backend/wallet-api/internal/isc/handlers/users"
+	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/btc"
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
-	"github.com/sirupsen/logrus"
+	"git.zam.io/wallet-backend/web-api/pkg/services/broker"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/dig"
-	"time"
 )
 
 // Create and initialize server command for given viper instance
 func Create(v *viper.Viper, cfg *config.RootScheme) cobra.Command {
 	command := cobra.Command{
-		Use:   "worker",
-		Short: "Runs Wallet-API misc-purposes worker",
+		Use:   "listener",
+		Short: "Runs Wallet-API broker listener",
 		RunE: func(_ *cobra.Command, args []string) error {
 			return serverMain(*cfg)
 		},
@@ -41,24 +40,17 @@ func serverMain(cfg config.RootScheme) (err error) {
 	// provide basic stuff
 	common.ProvideBasic(c, cfg)
 
-	// provide notifier
-	utils.MustProvide(c, providers.CheckOutdatedNotifier)
+	// register worker event handlers
+	utils.MustInvoke(c, users.Register)
 
 	// Run worker
-	utils.MustInvoke(c, func(logger logrus.FieldLogger, notifier processing.ICheckOutdatedNotifier) error {
-		sleepTimeout := time.Hour
-
-		l := logger.WithField("module", "wallets.worker")
-		for {
-			l.Debug("checking outdated")
-			err := notifier.OnCheckOutdated()
-			if err != nil {
-				l.WithError(err).Error("error occurs while updating")
-			}
-
-			l.Debugf("sleeping for %v", sleepTimeout)
-			time.Sleep(sleepTimeout)
+	utils.MustInvoke(c, func(broker broker.IBroker) error {
+		err := broker.Start()
+		if err != nil {
+			return err
 		}
+		select {}
+		return nil
 	})
 
 	return

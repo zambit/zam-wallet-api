@@ -1,6 +1,7 @@
 package providers
 
 import (
+	processingconf "git.zam.io/wallet-backend/wallet-api/config/processing"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers"
 	"git.zam.io/wallet-backend/wallet-api/internal/helpers/balance"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
@@ -26,4 +27,9 @@ func ProcessingApi(
 // ConfirmationsNotifier
 func ConfirmationsNotifier(db *gorm.DB, coordinator nodes.ICoordinator) processing.IConfirmationNotifier {
 	return processing.NewConfirmationsNotifier(db, coordinator)
+}
+
+// CheckOutdatedNotifier
+func CheckOutdatedNotifier(db *gorm.DB, cfg processingconf.Scheme) processing.ICheckOutdatedNotifier {
+	return processing.NewCheckOutdatedNotifier(db, cfg.TimeToWaitRecipient)
 }

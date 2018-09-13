@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"strings"
 	"sync"
+	"time"
 )
 
 // IConfirmationNotifier used to notify processing about confirmation events in block-chain
@@ -24,6 +25,39 @@ type IConfirmationNotifier interface {
 	// 'OnTxConfirmed(tx *TxExternal) error' which will be called when external tx reach necessary count
 	// of confirmations.
 	OnNewConfirmation(ctx context.Context, coinName string) error
+}
+
+// ICheckOutdatedNotifier
+type ICheckOutdatedNotifier interface {
+	OnCheckOutdated() error
+}
+
+// CheckOutdatedNotifier
+type CheckOutdatedNotifier struct {
+	database      *gorm.DB
+	timeToOutdate time.Duration
+}
+
+// NewCheckOutdatedNotifier
+func NewCheckOutdatedNotifier(db *gorm.DB, timeToOutdate time.Duration) ICheckOutdatedNotifier {
+	return &CheckOutdatedNotifier{
+		database:      db,
+		timeToOutdate: timeToOutdate,
+	}
+}
+
+// OnCheckOutdated
+func (notifier *CheckOutdatedNotifier) OnCheckOutdated() error {
+	return db.TransactionCtx(context.Background(), notifier.database, func(ctx context.Context, tx *gorm.DB) error {
+		return tx.Exec(
+			`update txs set status_id = (select id from tx_statuses where name = $1)
+			where to_wallet_id is null and to_address is null and to_phone is not null and 
+				  type = 'internal' and (updated_at < $2) and status_id = (select id from tx_statuses where name = $3);`,
+			TxStateCanceled,
+			time.Now().UTC().Add(-notifier.timeToOutdate),
+			TxStateAwaitRecipient,
+		).Error
+	})
 }
 
 // ConfirmationNotifier is IConfirmationNotifier implementation
@@ -191,7 +225,7 @@ func (notifier *ConfirmationNotifier) watchNewTxs(ctx context.Context, coinName 
 	err = db.TransactionCtx(ctx, notifier.database, func(ctx context.Context, dbTx *gorm.DB) error {
 		// firstly select new transactions hashes which is H(ntxs) - H(atxs), where H(ntxs) - set of hashes of incoming
 		// transactions and H(atxs) - set of hashes of already tracked transactions
-		var newTxsHashes []struct{
+		var newTxsHashes []struct {
 			Hash string
 		}
 		err := dbTx.Raw(

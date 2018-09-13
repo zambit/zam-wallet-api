@@ -1,2 +1,2 @@
-// Package worker defines server worker entry-point
+// Package worker misc-purposes worker entry-point
 package worker
