@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -272,6 +273,16 @@ func (node *ethNode) GetIncoming(ctx context.Context) (txs []nodes.IncomingTxDes
 			qErr := node.doESCall(ctx, "account", "txlist", &res, map[string]interface{}{
 				"address": address,
 			})
+			// if rate limit error occurs, repeat it with 1 sec delay
+			for qErr == errESRateLimit {
+				select {
+				case <-ctx.Done():
+				case <-time.Tick(time.Second):
+					qErr = node.doESCall(ctx, "account", "txlist", &res, map[string]interface{}{
+						"address": address,
+					})
+				}
+			}
 			if qErr != nil {
 				resChan <- resT{err: qErr}
 				return
@@ -282,7 +293,6 @@ func (node *ethNode) GetIncoming(ctx context.Context) (txs []nodes.IncomingTxDes
 
 			descrs := make([]nodes.IncomingTxDescr, 0, len(res))
 			for _, tDescr := range res {
-				//fmt.Println(tDescr.To, address)
 				if tDescr.To != address {
 					continue
 				}
@@ -430,6 +440,8 @@ func (node *ethNode) doRPCCall(ctx context.Context, method string, output interf
 	return
 }
 
+var errESRateLimit = errors.New("eth node: ES rate limit")
+
 func (node *ethNode) doESCall(
 	ctx context.Context,
 	module, action string,
@@ -465,6 +477,10 @@ func (node *ethNode) doESCall(
 	httpResp, err := node.httpClient.Do(req)
 	if err != nil {
 		return wrapNodeErr(err)
+	}
+
+	if httpResp.StatusCode == 403 {
+		return errESRateLimit
 	}
 
 	// unmarshal result
