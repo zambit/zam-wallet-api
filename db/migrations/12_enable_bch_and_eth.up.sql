@@ -1,0 +1,1 @@
+update coins set enabled = true where short_name =  ANY('{ETH,BCH}'::varchar(60)[]);
