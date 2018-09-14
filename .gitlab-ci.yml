@@ -51,7 +51,7 @@ build:
     - '[ ! -z "$tests_query" ] && cp `find -name *.test` $BUILD_OUT_DIR/tests'
 
     # build binary into artifact
-    - go build -ldflags="-X main.commitSHA=$CI_COMMIT_SHA -X main.commitRef=$CI_COMMIT_REF_NAME -X main.commitRep=CI_REPOSITORY_URL -X main.commitEnv=$CI_ENVIRONMENT_NAME -X main.commitPipID=$CI_PIPELINE_ID" -o $BUILD_OUT_DIR/$EXECUTABLE_NAME $EXECUTABLE_ENTRY_POINT
+    - go build -ldflags="-X main.commitSHA=$CI_COMMIT_SHA -X main.commitRef=$CI_COMMIT_REF_NAME -X main.commitRep=$CI_REPOSITORY_URL -X main.commitEnv=$CI_ENVIRONMENT_NAME -X main.commitPipID=$CI_PIPELINE_ID" -o $BUILD_OUT_DIR/$EXECUTABLE_NAME $EXECUTABLE_ENTRY_POINT
 
     # copy migrations
     - mkdir -p $BUILD_OUT_DIR/migrations
