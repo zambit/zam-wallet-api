@@ -14,7 +14,7 @@ import:
   vcs: git
   subpackages:
   - binding
-- package: https://github.com/gin-contrib/cors
+- package: github.com/gin-contrib/cors
   version: cf4846e6a636a76237a28d9286f163c132e841bc
   repo: https://github.com/gin-contrib/cors
   vcs: git

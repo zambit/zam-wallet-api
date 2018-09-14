@@ -36,6 +36,9 @@ type Scheme struct {
 	// CryptoNodes contains per crypto-coin connections info
 	CryptoNodes map[string]NodeConnection
 
+	// UserReporter user reporter
+	UserReporter bool
+
 	// BTC holds additional BTC-like node configuration values
 	BTC BTCNodeConfiguration
 

@@ -1,11 +1,13 @@
 package config
 
 import (
+	"git.zam.io/wallet-backend/common/pkg/types"
 	"git.zam.io/wallet-backend/wallet-api/config/processing"
 	"git.zam.io/wallet-backend/wallet-api/config/server"
 	"git.zam.io/wallet-backend/wallet-api/config/wallets"
 	"git.zam.io/wallet-backend/web-api/config/db"
 	"git.zam.io/wallet-backend/web-api/config/isc"
+	"git.zam.io/wallet-backend/web-api/config/logging"
 	"github.com/spf13/viper"
 	jconfig "github.com/uber/jaeger-client-go/config"
 	"time"
@@ -14,7 +16,7 @@ import (
 // RootScheme is the scheme used by top-level app
 type RootScheme struct {
 	// Env describes current environment
-	Env string
+	Env types.Environment
 
 	// DB connection description
 	DB db.Scheme
@@ -33,6 +35,9 @@ type RootScheme struct {
 
 	// JaegerConfig is jaeger tracer configuration
 	JaegerConfig jconfig.Configuration
+
+	// Logging logging configuration
+	Logging logging.Scheme
 }
 
 // Init set default values
@@ -54,4 +59,6 @@ func Init(v *viper.Viper) {
 	v.SetDefault("Wallets.ETH.NeedConfirmationsCount", 12)
 
 	v.SetDefault("Processing.TimeToWaitRecipient", time.Hour*72)
+
+	v.SetDefault("Logging.LogLevel", "info")
 }

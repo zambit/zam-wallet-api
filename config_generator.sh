@@ -27,7 +27,13 @@ isc:
     statsenabled: false
     statspath: /internal/stats
 
-wallets:
+Logging:
+    ErrorReporter:
+        DSN: '$SENTRY_DSN'
+    LogLevel: debug
+
+Wallets:
+    UserReporter: true
     BTC:
         NeedConfirmationsCount: 6
     cryptonodes:

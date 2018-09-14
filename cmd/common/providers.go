@@ -1,6 +1,7 @@
 package common
 
 import (
+	"git.zam.io/wallet-backend/common/pkg/types"
 	"git.zam.io/wallet-backend/wallet-api/config"
 	processingconf "git.zam.io/wallet-backend/wallet-api/config/processing"
 	serverconf "git.zam.io/wallet-backend/wallet-api/config/server"
@@ -9,6 +10,7 @@ import (
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
 	dbconf "git.zam.io/wallet-backend/web-api/config/db"
 	iscconf "git.zam.io/wallet-backend/web-api/config/isc"
+	"git.zam.io/wallet-backend/web-api/config/logging"
 	webserverconf "git.zam.io/wallet-backend/web-api/config/server"
 	"git.zam.io/wallet-backend/web-api/pkg/providers"
 	jconfig "github.com/uber/jaeger-client-go/config"
@@ -25,6 +27,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 	// provide configuration and her parts
 	utils.MustProvide(c, func() (
 		config.RootScheme,
+		logging.Scheme,
 		dbconf.Scheme,
 		iscconf.Scheme,
 		serverconf.Scheme,
@@ -33,6 +36,7 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 		jconfig.Configuration,
 		webserverconf.NotificatorScheme,
 		processingconf.Scheme,
+		types.Environment,
 	) {
 		servConf := cfg.Server
 		wservConf := webserverconf.Scheme{
@@ -43,11 +47,24 @@ func ProvideBasic(c *dig.Container, cfg config.RootScheme) {
 			Auth:    servConf.Auth,
 		}
 
-		return cfg, cfg.DB, cfg.ISC, cfg.Server, cfg.Wallets, wservConf, cfg.JaegerConfig, servConf.Notificator, cfg.Processing
+		return cfg,
+			cfg.Logging,
+			cfg.DB,
+			cfg.ISC,
+			cfg.Server,
+			cfg.Wallets,
+			wservConf,
+			cfg.JaegerConfig,
+			servConf.Notificator,
+			cfg.Processing,
+			cfg.Env
 	})
 
 	// provide root logger
 	utils.MustProvide(c, providers.RootLogger)
+
+	// provide reporter
+	utils.MustProvide(c, providers.Reporter)
 
 	// provide tracer
 	utils.MustProvide(c, internalproviders.Tracer)
