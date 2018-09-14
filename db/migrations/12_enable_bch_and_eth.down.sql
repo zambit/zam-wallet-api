@@ -1,1 +1,1 @@
-update coins set enalbled = false where short_name = ANY('{ETH,BCH}'::varchar(60)[]);
+update coins set enabled = false where short_name = ANY('{ETH,BCH}'::varchar(60)[]);
