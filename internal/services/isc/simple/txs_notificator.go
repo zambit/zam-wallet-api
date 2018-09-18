@@ -61,4 +61,4 @@ func (n *txsEventNotificator) AwaitRecipient(payload isc.TxEventPayload) error {
 	)
 }
 
-const notifMessageTemplate = `Hi from Zamzam Bank! You got %<amount>s %<coin>s from %<phone_number>s, in order to receive them, go through the verification of your phone at %<app_url>s`
+const notifMessageTemplate = `Hi from Zamzam! You got %<amount>s %<coin>s from %<phone_number>s, go to %<app_url>s`
