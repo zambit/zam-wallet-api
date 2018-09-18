@@ -153,6 +153,7 @@ func (api *Api) GetWallets(ctx context.Context, userPhone string, onlyCoin strin
 		var rawWts []queries.Wallet
 		err = api.database.Tx(func(tx db.ITx) error {
 			rawWts, totalCount, hasNext, err = queries.GetWallets(tx, queries.GetWalletFilters{
+				Enabled:   true,
 				UserPhone: userPhone,
 				ByCoin:    onlyCoin,
 				FromID:    fromID,
@@ -268,7 +269,7 @@ func (api *Api) SendToPhone(
 			// lookup destination user wallet
 			wts, _, _, err := queries.GetWallets(
 				tx,
-				queries.GetWalletFilters{UserPhone: toUserPhone, ByCoin: fromWallet.Coin.ShortName},
+				queries.GetWalletFilters{Enabled: true, UserPhone: toUserPhone, ByCoin: fromWallet.Coin.ShortName},
 			)
 			if err != nil {
 				return err
@@ -353,7 +354,7 @@ func (api *Api) SentToAddress(
 			// TODO this decision must be made inside processing but currently due to DDD principe this check stay here
 			wts, _, _, err := queries.GetWallets(
 				tx,
-				queries.GetWalletFilters{ByCoin: fromWallet.Coin.ShortName, ByAddress: toAddress},
+				queries.GetWalletFilters{Enabled: true, ByCoin: fromWallet.Coin.ShortName, ByAddress: toAddress},
 			)
 			if err != nil {
 				return err

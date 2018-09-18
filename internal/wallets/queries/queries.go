@@ -139,7 +139,9 @@ func GetWallet(tx db.ITx, userPhone string, walletID int64, forUpdate ...bool) (
 	}
 
 	err = scanWalletRow(tx.QueryRowx(
-		baseSelectWalletsRequest+` WHERE wallets.id = $1 AND wallets.user_phone = $2 `+forUpdateClause,
+		baseSelectWalletsRequest+
+			` WHERE wallets.id = $1 AND wallets.user_phone = $2 AND coins.enabled is TRUE`+
+			forUpdateClause,
 		walletID, userPhone,
 	), &wallet)
 	if err == sql.ErrNoRows {
@@ -150,6 +152,7 @@ func GetWallet(tx db.ITx, userPhone string, walletID int64, forUpdate ...bool) (
 
 // GetWalletFilters describes wallets filters
 type GetWalletFilters struct {
+	Enabled   bool
 	UserPhone string
 	Count     int64
 	FromID    int64
@@ -162,29 +165,31 @@ func GetWallets(tx db.ITx, filters GetWalletFilters) (
 	wallets []Wallet, totalCount int64, hasNext bool, err error,
 ) {
 	// prepare where clause
-	whereClause := ""
 	limitClause := ""
+	whereParts := make([]string, 0, 3)
 	whereArgs := map[string]interface{}{}
 
 	if filters.UserPhone != "" {
-		whereClause = " WHERE wallets.user_phone = :user_phone"
+		whereParts = append(whereParts, "wallets.user_phone = :user_phone")
 		whereArgs["user_phone"] = filters.UserPhone
 	}
-
+	if filters.Enabled {
+		whereParts = append(whereParts, "coins.enabled is TRUE")
+	}
 	if filters.ByCoin != "" {
 		// apply coin filter
 		byCoin := strings.ToUpper(filters.ByCoin)
-		whereClause = whereClause + " AND coins.short_name = :coin_short_name"
+		whereParts = append(whereParts, "coins.short_name = :coin_short_name")
 		whereArgs["coin_short_name"] = byCoin
 	}
 	if filters.FromID != 0 {
 		// apply pagination
-		whereClause = whereClause + " AND wallets.id > :wallet_id"
+		whereParts = append(whereParts, "wallets.id > :wallet_id")
 		whereArgs["wallet_id"] = filters.FromID
 	}
 	if filters.ByAddress != "" {
 		// apply address filter
-		whereClause = whereClause + " AND wallets.address = :address"
+		whereParts = append(whereParts, "wallets.address = :address")
 		whereArgs["address"] = filters.ByAddress
 	}
 	if filters.Count != 0 {
@@ -193,8 +198,16 @@ func GetWallets(tx db.ITx, filters GetWalletFilters) (
 		whereArgs["limit"] = filters.Count
 	}
 
+	whereClause := ""
+	if len(whereParts) > 0 {
+		whereClause = " WHERE " + strings.Join(whereParts, " AND ")
+	}
+
 	// preform query
-	rows, err := tx.NamedQuery(baseSelectWalletsRequest+whereClause+appendixSelectWalletsRequest+limitClause, whereArgs)
+	rows, err := tx.NamedQuery(
+		baseSelectWalletsRequest+whereClause+appendixSelectWalletsRequest+limitClause,
+		whereArgs,
+	)
 	if err != nil {
 		return
 	}
