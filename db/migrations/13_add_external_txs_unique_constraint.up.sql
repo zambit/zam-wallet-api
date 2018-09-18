@@ -1,0 +1,1 @@
+alter table txs_external add constraint txs_external_tx_hash_unique_idx unique (hash);

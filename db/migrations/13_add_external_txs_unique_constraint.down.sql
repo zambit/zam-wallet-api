@@ -1,0 +1,1 @@
+alter table txs_external drop constraint txs_external_tx_hash_unique_idx;
