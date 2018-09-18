@@ -18,10 +18,12 @@ import:
   version: cf4846e6a636a76237a28d9286f163c132e841bc
   repo: https://github.com/gin-contrib/cors
   vcs: git
+
 - package: github.com/golang-migrate/migrate
-  subpackages:
-  - database/postgres
-  - source/file
+  vsc: git
+  repo: https://github.com/golang-migrate/migrate
+  version: v3.5.1
+
 - package: github.com/jinzhu/gorm
 - package: github.com/lib/pq
 - package: github.com/jmoiron/sqlx
