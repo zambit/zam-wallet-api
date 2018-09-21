@@ -235,7 +235,7 @@ func (node *ethNode) IsConfirmed(ctx context.Context, hash string) (confirmed, a
 	var txDetails struct {
 		BlockNumber *hexutil.Uint `json:"blockNumber"`
 	}
-	err = node.doRPCCall(ctx, "eth_getTransactionByHash", &txDetails, hash)
+	err = node.doESCall(ctx, "proxy", "eth_getTransactionByHash", &txDetails, map[string]interface{}{"txhash": hash})
 	if err != nil {
 		return
 	}
@@ -483,25 +483,39 @@ func (node *ethNode) doESCall(
 		return errESRateLimit
 	}
 
-	// unmarshal result
-	var resp struct {
-		Status  int             `json:"status,string"`
-		Message string          `json:"message"`
-		Result  json.RawMessage `json:"result"`
-	}
-	err = json.NewDecoder(httpResp.Body).Decode(&resp)
-	if err != nil {
-		return wrapNodeErr(err, "escan: decode")
-	}
-	if resp.Status == 0 {
-		// ignore no transactions found error
-		if resp.Message == "No transactions found" {
-			return nil
+	if module == "proxy" {
+		resp := jsonrpc.RPCResponse{}
+		err = json.NewDecoder(httpResp.Body).Decode(&resp)
+		if err != nil {
+			return wrapNodeErr(err)
 		}
-		return wrapNodeErr(fmt.Errorf("escan: response with '%s'", resp.Message))
-	}
 
-	return wrapNodeErr(json.Unmarshal(resp.Result, output), "escan: decode body")
+		if resp.Error != nil {
+			return wrapNodeErr(resp.Error)
+		}
+
+		return wrapNodeErr(json.Unmarshal([]byte(resp.Result), output), "escan: decode body")
+	} else {
+		// unmarshal result
+		var resp struct {
+			Status  int             `json:"status,string"`
+			Message string          `json:"message"`
+			Result  json.RawMessage `json:"result"`
+		}
+		err = json.NewDecoder(httpResp.Body).Decode(&resp)
+		if err != nil {
+			return wrapNodeErr(err, "escan: decode")
+		}
+		if resp.Status == 0 {
+			// ignore no transactions found error
+			if resp.Message == "No transactions found" {
+				return nil
+			}
+			return wrapNodeErr(fmt.Errorf("escan: response with '%s'", resp.Message))
+		}
+
+		return wrapNodeErr(json.Unmarshal(resp.Result, output), "escan: decode body")
+	}
 }
 
 func wrapNodeErr(err error, descr ...string) error {
