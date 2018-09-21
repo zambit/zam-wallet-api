@@ -193,7 +193,7 @@ func (n *btcNode) Send(
 	toAddress string,
 	amount *decimal.Big,
 ) (txHash string, fee *decimal.Big, err error) {
-	err = n.doCall("sendtoaddress", &txHash, toAddress, amount)
+	err = n.doCall("sendtoaddress", &txHash, toAddress, amount, "", "", true)
 	if rpcErr, ok := err.(*jsonrpc.RPCError); ok {
 		if rpcErr.Code == rpcErrInvalidAddressCode {
 			err = nodes.ErrAddressInvalid
