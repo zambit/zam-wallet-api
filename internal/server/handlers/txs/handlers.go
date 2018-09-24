@@ -139,7 +139,7 @@ func GetFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Handler
 		err = trace.InsideSpanE(ctx, "get_tx", func(ctx context.Context, span opentracing.Span) error {
 			var err error
 			// get tx using txs api
-			tx, err = txsApi.Get(ctx, txID)
+			tx, err = txsApi.Get(ctx, txID, userPhone)
 			return err
 		})
 		if err != nil {

@@ -179,6 +179,8 @@ func (f DateRangeFilter) filter(ctx filterCtx) (nCtx filterCtx, err error) {
 	return
 }
 
+const innerTxsFilter = "(to_wallets.user_phone = ? and txs.status_id in (select id from tx_statuses where name = ? or name = ?))"
+
 func (f UserFilter) filter(ctx filterCtx) (nCtx filterCtx, err error) {
 	phone, err := types.NewPhone(string(f))
 	if err != nil {
@@ -189,10 +191,21 @@ func (f UserFilter) filter(ctx filterCtx) (nCtx filterCtx, err error) {
 	nCtx = ctx
 	if ctx.direction == nil {
 		nCtx = joinFromWalletsOnce(joinToWalletsOnce(nCtx))
-		nCtx.q = nCtx.q.Where("wallets.user_phone = ? or to_wallets.user_phone = ?", phone, phone)
+		nCtx.q = nCtx.q.Where(
+			"wallets.user_phone = ? or "+innerTxsFilter,
+			phone,
+			phone,
+			processing.TxStateAwaitConfirmations,
+			processing.TxStateProcessed,
+		)
 	} else if *ctx.direction {
 		nCtx = joinToWalletsOnce(nCtx)
-		nCtx.q = nCtx.q.Where("to_wallets.user_phone = ?", phone)
+		nCtx.q = nCtx.q.Where(
+			innerTxsFilter,
+			phone,
+			processing.TxStateAwaitConfirmations,
+			processing.TxStateProcessed,
+		)
 	} else {
 		nCtx = joinFromWalletsOnce(nCtx)
 		nCtx.q = nCtx.q.Where("wallets.user_phone = ?", phone)
