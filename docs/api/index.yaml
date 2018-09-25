@@ -181,6 +181,20 @@ paths:
               - week
               - month
         - in: query
+          name: timezone
+          required: false
+          scheme:
+            type: string
+            format: utc_offset
+          description: |
+            Shift transaction timestamps before calculating groups boundaries
+
+            Format of this value is float representation of hours between UTC and user time zone. Value may be negative,
+            or represent fractures of hour.
+            Notes:
+            1) don't use commas insted of dot
+            2) don't use minutes count after dot
+        - in: query
           name: convert
           required: false
           description: Fiat currency for additional amount representation

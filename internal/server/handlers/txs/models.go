@@ -38,6 +38,7 @@ type GetAllRequest struct {
 	Count     *int64  `form:"count"`
 	Convert   string  `form:"convert"`
 	Group     string  `form:"group"`
+	Timezone  string  `form:"timezone"`
 }
 
 // View tx api representation
@@ -154,7 +155,13 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 }
 
 // ToGroupViews
-func ToGroupViews(txs []processing.Tx, userPhone string, rates common.AdditionalRates, group string) []GroupView {
+func ToGroupViews(
+	txs []processing.Tx,
+	userPhone string,
+	rates common.AdditionalRates,
+	group string,
+	tz *time.Location,
+) []GroupView {
 	if len(txs) == 0 {
 		return nil
 	}
@@ -206,15 +213,25 @@ func ToGroupViews(txs []processing.Tx, userPhone string, rates common.Additional
 	//
 	defaultCurrencyRate := rates.ForCoinCurrency(common.DefaultCryptoCurrency)
 	for i := 0; i < len(txs); {
-		startG := groupStartFunc(txs[i].CreatedAt)
-		endG := groupEndFunc(txs[i].CreatedAt)
+		firstTxCreatedAt := txs[i].CreatedAt
+		if tz != nil {
+			firstTxCreatedAt = firstTxCreatedAt.In(tz)
+		}
+
+		startG := groupStartFunc(firstTxCreatedAt)
+		endG := groupEndFunc(firstTxCreatedAt)
 
 		groupped := make([]View, 0, 3)
 		groupFiatTotal := new(bdecimal.Big)
 
 		for y, tx := range txs[i:] {
+			txCreatedAt := tx.CreatedAt
+			if tz != nil {
+				txCreatedAt = txCreatedAt.In(tz)
+			}
+
 			// stop group if tx out of group bounds
-			if tx.CreatedAt.After(endG) || tx.CreatedAt.Before(startG) {
+			if txCreatedAt.After(endG) || txCreatedAt.Before(startG) {
 				i += y
 				break
 			}

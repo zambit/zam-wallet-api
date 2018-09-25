@@ -171,7 +171,10 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 
 		// TODO now params which follows invalid param will not be populated. Rework whole bind/validation layer
 		c.ShouldBindQuery(&params)
-		var groupTxs bool
+		var (
+			groupTxs bool
+			groupTZ  *time.Location
+		)
 		if params.Group != "" {
 			params.Group = strings.ToLower(params.Group)
 			switch params.Group {
@@ -180,6 +183,15 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 			default:
 				// ignore invalid param
 				params.Group = ""
+			}
+
+			// process timezone parameter only if groupping is required
+			if groupTxs && params.Timezone != "" {
+				offsetHours, pErr := strconv.ParseFloat(params.Timezone, 10)
+				// ignore error, also check that abs offset less then 12 hours
+				if pErr == nil && offsetHours >= -12 && offsetHours <= 12 {
+					groupTZ = time.FixedZone("", int(offsetHours*60*60))
+				}
 			}
 		}
 
@@ -241,7 +253,7 @@ func GetAllFactory(txsApi txs.IApi, converter convert.ICryptoCurrency) base.Hand
 		} else {
 			// prepare response for grouped txs
 			resp = GroupedResponse{
-				GroupedTransactions: ToGroupViews(allTxs, userPhone, rates, params.Group),
+				GroupedTransactions: ToGroupViews(allTxs, userPhone, rates, params.Group, groupTZ),
 				TotalCount:          totalCount,
 				Count:               count,
 				Next:                next,
