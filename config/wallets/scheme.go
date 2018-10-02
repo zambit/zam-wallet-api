@@ -32,6 +32,11 @@ type ETHNodeConfiguration struct {
 	MasterPass string
 }
 
+type ZAMNodeConfiguration struct {
+	AssetName       string
+	IssuerPublicKey string
+}
+
 type Scheme struct {
 	// CryptoNodes contains per crypto-coin connections info
 	CryptoNodes map[string]NodeConnection
@@ -44,4 +49,7 @@ type Scheme struct {
 
 	// ETH holds additional ETH-like node configuration values
 	ETH ETHNodeConfiguration
+
+	// ETH holds additional ETH-like node configuration values
+	ZAM ZAMNodeConfiguration
 }

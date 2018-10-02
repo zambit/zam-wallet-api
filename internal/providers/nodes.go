@@ -22,6 +22,11 @@ func Coordinator(wConf walletconf.Scheme, logger logrus.FieldLogger, reporter se
 			if err != nil {
 				return
 			}
+		case "zam":
+			additionalParams, err = generateZAMNodeAdditionalParams(wConf.ZAM)
+			if err != nil {
+				return
+			}
 		}
 
 		logger.WithField(
@@ -54,6 +59,11 @@ func generateBTCNodeAdditionalParams(conf walletconf.BTCNodeConfiguration) map[s
 }
 
 func generateETHNodeAdditionalParams(conf walletconf.ETHNodeConfiguration) (out map[string]interface{}, err error) {
+	err = mapstructure.Decode(&conf, &out)
+	return
+}
+
+func generateZAMNodeAdditionalParams(conf walletconf.ZAMNodeConfiguration) (out map[string]interface{}, err error) {
 	err = mapstructure.Decode(&conf, &out)
 	return
 }

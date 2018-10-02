@@ -30,7 +30,10 @@ func Register(coinName string, p Provider) {
 }
 
 // Get provider for coin
-func Get(coinName string) (Provider, bool) {
+func Get(coinName string, logger logrus.FieldLogger) (Provider, bool) {
+	logger.WithField(
+		"conn_params", "test",
+	)
 	coinName = strings.ToUpper(coinName)
 	p, ok := registry[coinName]
 	return p, ok
