@@ -10,10 +10,12 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/btc"
 	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/eth"
+	_ "git.zam.io/wallet-backend/wallet-api/internal/services/nodes/zam"
 	"git.zam.io/wallet-backend/web-api/cmd/utils"
 	"git.zam.io/wallet-backend/web-api/pkg/providers"
 	"git.zam.io/wallet-backend/web-api/pkg/server/handlers/static"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/dig"
@@ -25,6 +27,7 @@ func Create(v *viper.Viper, cfg *config.RootScheme) cobra.Command {
 		Use:   "server",
 		Short: "Runs Wallet-API server",
 		RunE: func(_ *cobra.Command, args []string) error {
+			logrus.Info("Server starting")
 			return serverMain(*cfg)
 		},
 	}

@@ -50,6 +50,5 @@ type Scheme struct {
 	// ETH holds additional ETH-like node configuration values
 	ETH ETHNodeConfiguration
 
-	// ETH holds additional ETH-like node configuration values
 	ZAM ZAMNodeConfiguration
 }

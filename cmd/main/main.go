@@ -8,6 +8,7 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/cmd/watcher"
 	"git.zam.io/wallet-backend/wallet-api/cmd/worker"
 	"git.zam.io/wallet-backend/wallet-api/config"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -21,6 +22,7 @@ var (
 
 // main executes specified command using cobra, on error will panic for nice stack print and non-zero exit code
 func main() {
+	logrus.Info("Server instance starting")
 	var cfg config.RootScheme
 	v := viper.New()
 

@@ -116,6 +116,7 @@ func Dial(
 		etherScanParams:   struct{ host, apiKey string }{host: params.EtherscanHost, apiKey: params.EtherscanApiKey},
 	}
 	var netId netIdT
+	logrus.Info("net call")
 	err = node.doRPCCall(context.Background(), "net_version", &netId)
 	if err != nil {
 		return nil, wrapNodeErr(err)

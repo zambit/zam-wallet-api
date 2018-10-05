@@ -80,6 +80,7 @@ func (c *coordinator) Dial(
 	additionalParams map[string]interface{},
 ) error {
 	coinName = strings.ToUpper(coinName)
+	logrus.Info(coinName)
 
 	provider, ok := providers.Get(coinName)
 	if !ok {
