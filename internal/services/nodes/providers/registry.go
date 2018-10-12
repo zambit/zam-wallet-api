@@ -35,7 +35,5 @@ func Get(coinName string) (Provider, bool) {
 	coinName = strings.ToUpper(coinName)
 	logrus.Info("GET coin " + coinName)
 	p, ok := registry[coinName]
-	//logrus.Info(p)
-	logrus.Info(ok)
 	return p, ok
 }
