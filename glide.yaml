@@ -18,12 +18,9 @@ import:
   version: cf4846e6a636a76237a28d9286f163c132e841bc
   repo: https://github.com/gin-contrib/cors
   vcs: git
-
 - package: github.com/golang-migrate/migrate
-  vsc: git
-  repo: https://github.com/golang-migrate/migrate
   version: v3.5.1
-
+  repo: https://github.com/golang-migrate/migrate
 - package: github.com/jinzhu/gorm
 - package: github.com/lib/pq
 - package: github.com/jmoiron/sqlx
@@ -33,3 +30,6 @@ import:
 - package: github.com/google/go-querystring
 - package: github.com/mitchellh/mapstructure
   version: v1.0.0
+- package: github.com/stellar/go
+  subpackages:
+  - clients/horizon

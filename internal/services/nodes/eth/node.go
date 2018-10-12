@@ -167,12 +167,15 @@ func (node *ethNode) Create(ctx context.Context) (address string, err error) {
 // Balance
 func (node *ethNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
 	var bal hexutil.Big
+	logrus.Info(bal)
 	err = node.doRPCCall(ctx, "eth_getBalance", &bal, address, "latest")
 	if err != nil {
 		err = coerceErr(err)
 		return
 	}
+	logrus.Info(&bal)
 	balance = new(decimal.Big).SetBigMantScale((*big.Int)(&bal), weiOrderOfNumber)
+	logrus.Info(balance)
 	return
 }
 

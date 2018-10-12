@@ -10,6 +10,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/stellar/go/clients/horizon"
 	"io"
 	"net/http"
 	"strings"
@@ -112,13 +113,17 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 
 // Balance
 func (node *zamNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
-	//var bal hexutil.Big
-	/*err = node.doRPCCall(ctx, "eth_getBalance", &bal, address, "latest")
+
+	//Get data from Stellar blockchain
+	account, err := horizon.DefaultTestNetClient.LoadAccount(address)
 	if err != nil {
 		err = coerceErr(err)
 		return
-	}*/
-	//balance = new(decimal.Big).SetBigMantScale((*big.Int)(&bal), weiOrderOfNumber)
+	}
+
+	//convert balance string to decimal int
+	balance = new(decimal.Big)
+	balance.SetString(account.Balances[0].Balance)
 	return
 }
 
