@@ -169,9 +169,7 @@ func (n *btcNode) Balance(ctx context.Context, address string) (balance *decimal
 			err = nodes.ErrAddressInvalid
 		}
 	}
-	logrus.Info(inputBalance)
 	casted := decimal.Big(inputBalance)
-	logrus.Info(casted)
 	balance = &casted
 	return
 }
