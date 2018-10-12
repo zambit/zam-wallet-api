@@ -21,7 +21,6 @@ var registry map[string]Provider
 
 // Register Provider for a specific coin, must be called before app main
 func Register(coinName string, p Provider) {
-	logrus.Info("Register Register Register Register Register Register")
 	coinName = strings.ToUpper(coinName)
 	logrus.Info("Register coin " + coinName)
 	if registry == nil {
@@ -33,7 +32,6 @@ func Register(coinName string, p Provider) {
 
 // Get provider for coin
 func Get(coinName string) (Provider, bool) {
-	logrus.Info("GET GET GET GET GET GET")
 	coinName = strings.ToUpper(coinName)
 	logrus.Info("GET coin " + coinName)
 	p, ok := registry[coinName]
