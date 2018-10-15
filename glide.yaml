@@ -30,6 +30,6 @@ import:
 - package: github.com/google/go-querystring
 - package: github.com/mitchellh/mapstructure
   version: v1.0.0
-- package: github.com/stellar/go
+- package: github.com/andskur/go
   subpackages:
   - clients/horizon
