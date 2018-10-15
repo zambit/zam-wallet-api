@@ -55,6 +55,9 @@ func New(serviceHost string) (convert.ICryptoCurrency, error) {
 // GetRate implements ICryptoCurrency
 func (c *CryptoCurrency) GetRate(ctx context.Context, coinName string, dstCurrencyName string) (rate *convert.Rate, err error) {
 	resp, err := c.doQuery(ctx, []string{coinName}, dstCurrencyName)
+	if err != nil {
+		return
+	}
 
 	coinName = strings.ToUpper(coinName)
 	dstCurrencyName = strings.ToUpper(dstCurrencyName)
@@ -71,9 +74,9 @@ func (c *CryptoCurrency) GetRate(ctx context.Context, coinName string, dstCurren
 		if coinName == "ZAM" {
 			rate = new(convert.Rate)
 			(*decimal.Big)(rate).SetFloat64(ZamValue)
+		} else {
+			err = convert.ErrCryptoCurrencyName
 		}
-
-		err = convert.ErrCryptoCurrencyName
 	}
 	return
 }
@@ -104,9 +107,9 @@ func (c *CryptoCurrency) GetMultiRate(ctx context.Context, coinNames []string, d
 				val := decimal.Big{}
 				val.SetFloat64(ZamValue)
 				mr[coinName] = convert.Rate(val)
+			} else {
+				err = convert.ErrCryptoCurrencyName
 			}
-
-			err = convert.ErrCryptoCurrencyName
 		}
 	}
 	return

@@ -10,6 +10,7 @@ import (
 	"github.com/ericlagergren/decimal"
 	"github.com/gin-gonic/gin"
 	"github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 	"strings"
 )
 
@@ -58,6 +59,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 				if len(coinNames) == 0 {
 					return nil
 				}
+				logrus.Info(coinNames)
 
 				addDefaultCurrencyCoin := true
 				for _, name := range coinNames {
@@ -70,6 +72,8 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 					coinNames = append(coinNames, defaultCryptoCurrency)
 				}
 
+				logrus.Info(coinNames)
+
 				err = trace.InsideSpanE(
 					ctx,
 					"converting_coin_balances",
@@ -80,6 +84,7 @@ func UserStatFactory(api *wallets.Api, cryptoConverter convert.ICryptoCurrency) 
 						if err != nil {
 							return err
 						}
+						logrus.Info(rates)
 
 						// calculate total fiat balance
 						for _, w := range wts {
