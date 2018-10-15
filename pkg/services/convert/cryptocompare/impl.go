@@ -15,7 +15,11 @@ import (
 	"strings"
 )
 
-const multiPricePath = "/data/pricemulti"
+//TODO Transfer ZamValue to Config
+const (
+	multiPricePath = "/data/pricemulti"
+	ZamValue       = 0.02
+)
 
 type queryParams struct {
 	From []string `url:"fsyms"`
@@ -51,10 +55,7 @@ func New(serviceHost string) (convert.ICryptoCurrency, error) {
 // GetRate implements ICryptoCurrency
 func (c *CryptoCurrency) GetRate(ctx context.Context, coinName string, dstCurrencyName string) (rate *convert.Rate, err error) {
 	resp, err := c.doQuery(ctx, []string{coinName}, dstCurrencyName)
-	if err != nil {
-		return
-	}
-	// lookup values
+
 	coinName = strings.ToUpper(coinName)
 	dstCurrencyName = strings.ToUpper(dstCurrencyName)
 
@@ -66,6 +67,12 @@ func (c *CryptoCurrency) GetRate(ctx context.Context, coinName string, dstCurren
 			err = convert.ErrFiatCurrencyName
 		}
 	} else {
+		// check if coin is ZAM token
+		if coinName == "ZAM" {
+			rate = new(convert.Rate)
+			(*decimal.Big)(rate).SetFloat64(ZamValue)
+		}
+
 		err = convert.ErrCryptoCurrencyName
 	}
 	return
@@ -92,6 +99,13 @@ func (c *CryptoCurrency) GetMultiRate(ctx context.Context, coinNames []string, d
 			}
 			// ignore missed currencies
 		} else {
+			// check if coin is ZAM token
+			if coinNameUp == "ZAM" {
+				val := decimal.Big{}
+				val.SetFloat64(ZamValue)
+				mr[coinName] = convert.Rate(val)
+			}
+
 			err = convert.ErrCryptoCurrencyName
 		}
 	}
