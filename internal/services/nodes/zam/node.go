@@ -16,10 +16,7 @@ import (
 	"strings"
 )
 
-const (
-	defaultPort      = 443
-	weiOrderOfNumber = 18
-)
+const defaultPort = 443
 
 // zamNode
 type zamNode struct {
