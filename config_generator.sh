@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #/bin/bash
 
 echo 'env: staging
@@ -52,8 +53,14 @@ Wallets:
         eth:
             host: '$ETH_HOST'
             testnet: '$ETH_TESTNET'
+        zam:
+            host: '$STELLAR_HOST'
+            testnet: '$STELLAR_TESTNET'
     ETH:
        EtherscanHost: '$ETHSCAN_HOST'
        EtherscanApiKey: '$ETHSCAN_KEY'
        MasterPass: '$ETH_MASTERPASS'
+    ZAM:
+        AssetName: '$ZAM_NAME'
+        IssuerPublicKey: '$ZAM_ISSUER'
 '

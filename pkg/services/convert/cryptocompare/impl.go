@@ -55,9 +55,9 @@ func New(serviceHost string) (convert.ICryptoCurrency, error) {
 // GetRate implements ICryptoCurrency
 func (c *CryptoCurrency) GetRate(ctx context.Context, coinName string, dstCurrencyName string) (rate *convert.Rate, err error) {
 	resp, err := c.doQuery(ctx, []string{coinName}, dstCurrencyName)
-	if err != nil {
+	/*if err != nil {
 		return
-	}
+	}*/
 
 	coinName = strings.ToUpper(coinName)
 	dstCurrencyName = strings.ToUpper(dstCurrencyName)
