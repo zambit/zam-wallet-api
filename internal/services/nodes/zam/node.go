@@ -6,17 +6,22 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
 	"github.com/andskur/go/clients/horizon"
+	"github.com/andskur/go/keypair"
 	"github.com/danields761/jsonrpc"
 	"github.com/ericlagergren/decimal"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 )
 
 const defaultPort = 443
+
+//TODO Get Horizon client from config
 
 // zamNode
 type zamNode struct {
@@ -104,7 +109,44 @@ var _ nodes.IWalletObserver = (*zamNode)(nil)
 
 // Create new account using personal_newAccount rpc method
 func (node *zamNode) Create(ctx context.Context) (address string, err error) {
-	//err = node.doRPCCall(ctx, "personal_newAccount", &address)
+	pair, err := keypair.Random()
+	if err != nil {
+		return
+	}
+
+	logrus.Info(pair.Seed())
+	logrus.Info(pair.Address())
+
+	address = pair.Address()
+
+	//Get coins from bot
+	resp, err := http.Get("https://friendbot.stellar.org/?addr=" + address)
+	if err != nil {
+		return
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logrus.Info(string(body))
+
+	/*tx, err := build.Transaction(
+		build.TestNetwork,
+		build.SourceAccount{source},
+		build.AutoSequence{horizon.DefaultTestNetClient},
+		build.Payment(
+			build.Destination{destination},
+			build.NativeAmount{"10"},
+		),
+	)
+	if err != nil {
+		return
+	}
+
+	logrus.Info(tx)*/
+
 	return
 }
 
@@ -112,7 +154,8 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 func (node *zamNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
 
 	//Get data from Stellar blockchain
-	account, err := horizon.DefaultTestNetClient.LoadAccount(address)
+	client := horizon.DefaultTestNetClient
+	account, err := client.LoadAccount(address)
 	if err != nil {
 		err = coerceErr(err)
 		return
