@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes"
 	"git.zam.io/wallet-backend/wallet-api/internal/services/nodes/providers"
+	"github.com/andskur/go/build"
 	"github.com/andskur/go/clients/horizon"
 	"github.com/andskur/go/keypair"
 	"github.com/danields761/jsonrpc"
@@ -109,6 +110,8 @@ var _ nodes.IWalletObserver = (*zamNode)(nil)
 
 // Create new account using personal_newAccount rpc method
 func (node *zamNode) Create(ctx context.Context) (address string, err error) {
+
+	// Generate Stellar keypair
 	pair, err := keypair.Random()
 	if err != nil {
 		return
@@ -117,14 +120,14 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 	logrus.Info(pair.Seed())
 	logrus.Info(pair.Address())
 
+	seed := pair.Seed()
 	address = pair.Address()
 
-	//Get coins from bot
+	// Get coins from bot
 	resp, err := http.Get("https://friendbot.stellar.org/?addr=" + address)
 	if err != nil {
 		return
 	}
-
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -132,20 +135,40 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 	}
 	logrus.Info(string(body))
 
-	/*tx, err := build.Transaction(
-		build.TestNetwork,
-		build.SourceAccount{source},
+	// Change Trust
+	// Build Transaction
+	tx, err := build.Transaction(
+		build.SourceAccount{address},
 		build.AutoSequence{horizon.DefaultTestNetClient},
-		build.Payment(
-			build.Destination{destination},
-			build.NativeAmount{"10"},
-		),
+		build.TestNetwork,
+		build.Trust("Zam", "GDR4NOC655VWSR2OCVSV3IQVZG4BQN5QVIHKEENZTE6MDLPOKLMREMXQ"),
 	)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Sign Transaction
+	txe, err := tx.Sign(seed)
 	if err != nil {
 		return
 	}
 
-	logrus.Info(tx)*/
+	txeB64, err := txe.Base64()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	//logrus.Info("tx base64: %s", txeB64)
+
+	// Send transaction
+	resTx, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
+	if err != nil {
+		panic(err)
+	}
+
+	logrus.Info(resTx)
 
 	return
 }
