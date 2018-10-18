@@ -123,9 +123,9 @@ func (w *multiWrapper) Balance(ctx context.Context, address string) (balance *de
 	return
 }
 
-func (w *multiWrapper) Create(ctx context.Context) (address string, err error) {
+func (w *multiWrapper) Create(ctx context.Context) (address string, secret string, err error) {
 	w.safeInvoke(func() error {
-		address, err = w.IGenerator.Create(ctx)
+		address, secret, err = w.IGenerator.Create(ctx)
 		return err
 	})
 	return

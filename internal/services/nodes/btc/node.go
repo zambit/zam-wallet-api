@@ -125,7 +125,7 @@ func (n *btcNode) Close() error {
 }
 
 // Create new BTC wallet chained with root wallet
-func (n *btcNode) Create(ctx context.Context) (address string, err error) {
+func (n *btcNode) Create(ctx context.Context) (address string, secret string, err error) {
 	err = n.doCall("getnewaddress", &address)
 	if err != nil {
 		return

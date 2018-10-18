@@ -92,7 +92,13 @@ func SendFactory(walletApi *wallets.Api, converter convert.ICryptoCurrency) base
 			err = trace.InsideSpanE(ctx, "send_to_phone", func(ctx context.Context, span opentracing.Span) error {
 				var err error
 				// try send money
-				tx, err = walletApi.SendToPhone(ctx, userPhone, params.WalletID, params.Recipient, (*decimal.Big)(params.Amount))
+				tx, err = walletApi.SendToPhone(
+					ctx,
+					userPhone,
+					params.WalletID,
+					params.Recipient,
+					(*decimal.Big)(params.Amount),
+				)
 				return err
 			})
 		}

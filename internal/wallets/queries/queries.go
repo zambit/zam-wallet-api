@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+//TODO Move secret keys to another table
+
 const (
 	notNullViolationErrCode          = "23502"
 	uniqueConstraintViolationErrCode = "23505"
@@ -46,8 +48,8 @@ func CreateWallet(tx db.ITx, wallet Wallet) (newWallet Wallet, err error) {
 
 // WalletDiff used by update request
 type WalletDiff struct {
-	Name, Address *string
-	CoinID        *int64
+	Name, Address, Secret *string
+	CoinID                *int64
 }
 
 const (
@@ -71,6 +73,11 @@ func UpdateWallet(tx db.ITx, id int64, diff *WalletDiff) (err error) {
 	if diff.Address != nil {
 		colNames = append(colNames, "address")
 		colArgs = append(colArgs, *diff.Address)
+	}
+
+	if diff.Secret != nil {
+		colNames = append(colNames, "secret")
+		colArgs = append(colArgs, *diff.Secret)
 	}
 
 	if diff.CoinID != nil {

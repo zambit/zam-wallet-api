@@ -1,0 +1,1 @@
+alter table wallets add column secret varchar(512);

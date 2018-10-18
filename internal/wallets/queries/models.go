@@ -21,6 +21,9 @@ type Wallet struct {
 
 	Address string `db:"address"`
 
+	//TODO Move secret keys to another table
+	Secret string `db:"secret"`
+
 	CreatedAt time.Time `db:"created_at"`
 
 	Coin   Coin  `db:",prefix=coins_" gorm:"foreignkey:CoinID;association_autoupdate:false;association_autocreate:false"`

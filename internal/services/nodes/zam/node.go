@@ -102,14 +102,14 @@ func (n *zamNode) Close() error {
 // test implementation
 var _ nodes.IGenerator = (*zamNode)(nil)
 var _ nodes.IWalletObserver = (*zamNode)(nil)
+var _ nodes.ITxSender = (*zamNode)(nil)
 
 //var _ nodes.IAccountObserver = (*zamNode)(nil)
 //var _ nodes.ITxsObserver = (*zamNode)(nil)
 //var _ nodes.IWatcherLoop = (*zamNode)(nil)
-//var _ nodes.ITxSender = (*zamNode)(nil)
 
 // Create new account using personal_newAccount rpc method
-func (node *zamNode) Create(ctx context.Context) (address string, err error) {
+func (node *zamNode) Create(ctx context.Context) (address string, secret string, err error) {
 
 	// Generate Stellar keypair
 	pair, err := keypair.Random()
@@ -117,10 +117,10 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 		return
 	}
 
-	logrus.Info(pair.Seed())
-	logrus.Info(pair.Address())
+	//logrus.Info(pair.Seed())
+	//logrus.Info(pair.Address())
 
-	seed := pair.Seed()
+	secret = pair.Seed()
 	address = pair.Address()
 
 	// Get coins from bot
@@ -137,6 +137,8 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 
 	// Change Trust
 	// Build Transaction
+	//TODO get zam token name and issuer from config
+	//TODO move SetOption transaction to separate method
 	tx, err := build.Transaction(
 		build.SourceAccount{address},
 		build.AutoSequence{horizon.DefaultTestNetClient},
@@ -149,7 +151,7 @@ func (node *zamNode) Create(ctx context.Context) (address string, err error) {
 	}
 
 	// Sign Transaction
-	txe, err := tx.Sign(seed)
+	txe, err := tx.Sign(secret)
 	if err != nil {
 		return
 	}
@@ -187,6 +189,11 @@ func (node *zamNode) Balance(ctx context.Context, address string) (balance *deci
 	//convert balance string to decimal int
 	balance = new(decimal.Big)
 	balance.SetString(account.Balances[0].Balance)
+	return
+}
+
+func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, fee *decimal.Big, err error) {
+
 	return
 }
 

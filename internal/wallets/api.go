@@ -83,7 +83,7 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 
 		// after wallet was successfully created we may generate new wallet address
 		trace.InsideSpan(ctx, "wallet_generation", func(ctx context.Context, span opentracing.Span) {
-			wallet.Address, err = generator.Create(ctx)
+			wallet.Address, wallet.Secret, err = generator.Create(ctx)
 			if err != nil {
 				trace.LogErrorWithMsg(span, err, "error occurs while generating wallet address")
 			}
@@ -95,7 +95,13 @@ func (api *Api) CreateWallet(ctx context.Context, userPhone string, coinName, wa
 		span.LogKV("generated_address", wallet.Address)
 
 		// then update wallet to new address
-		err = queries.UpdateWallet(tx, wallet.ID, &queries.WalletDiff{Address: &wallet.Address})
+		err = queries.UpdateWallet(
+			tx,
+			wallet.ID,
+			&queries.WalletDiff{
+				Address: &wallet.Address,
+				Secret:  &wallet.Secret,
+			})
 
 		return
 	})

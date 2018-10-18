@@ -159,7 +159,7 @@ var _ nodes.IWatcherLoop = (*ethNode)(nil)
 var _ nodes.ITxSender = (*ethNode)(nil)
 
 // Create new account using personal_newAccount rpc method
-func (node *ethNode) Create(ctx context.Context) (address string, err error) {
+func (node *ethNode) Create(ctx context.Context) (address string, secret string, err error) {
 	err = node.doRPCCall(ctx, "personal_newAccount", &address, node.getMasterPass())
 	return
 }

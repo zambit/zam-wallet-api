@@ -7,7 +7,7 @@ import (
 // IGenerator used to generate user wallet for specific coin
 type IGenerator interface {
 	// Create coin wallet address
-	Create(ctx context.Context) (address string, err error)
+	Create(ctx context.Context) (address string, secret string, err error)
 }
 
 // retErrGenerator returns error on each call
@@ -16,6 +16,6 @@ type retErrGenerator struct {
 }
 
 // GetBalance implements IAccountObserver
-func (obs retErrGenerator) Create(ctx context.Context) (address string, err error) {
-	return "", obs.e
+func (obs retErrGenerator) Create(ctx context.Context) (address string, secret string, err error) {
+	return "", "", obs.e
 }
