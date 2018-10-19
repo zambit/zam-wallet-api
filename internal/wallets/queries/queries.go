@@ -127,6 +127,7 @@ SELECT
 	wallets.coin_id, 
 	wallets.name, 
 	wallets.address,
+	wallets.secret,
 	wallets.created_at,
 	coins.id as coins_id,
     coins.name as coins_name,
@@ -153,6 +154,18 @@ func GetWallet(tx db.ITx, userPhone string, walletID int64, forUpdate ...bool) (
 	), &wallet)
 	if err == sql.ErrNoRows {
 		err = errs.ErrNoSuchWallet
+	}
+	return
+}
+
+// Get wallet secret key from public address
+func GetSecretFromAddress(tx db.ITx, coinShortName string) (coin Coin, err error) {
+	err = tx.QueryRowx(
+		`SELECT id, name, short_name, enabled FROM coins WHERE short_name = $1 AND enabled = true`,
+		strings.ToUpper(coinShortName),
+	).StructScan(&coin)
+	if err == sql.ErrNoRows {
+		err = errs.ErrNoSuchCoin
 	}
 	return
 }
@@ -306,6 +319,7 @@ func scanWalletRow(row scannable, wallet *Wallet) error {
 		&wallet.CoinID,
 		&wallet.Name,
 		&wallet.Address,
+		&wallet.Secret,
 		&wallet.CreatedAt,
 		&wallet.Coin.ID,
 		&wallet.Coin.Name,

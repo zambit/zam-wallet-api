@@ -139,9 +139,10 @@ func (w *multiWrapper) Send(
 	ctx context.Context,
 	fromAddress, toAddress string,
 	amount *decimal.Big,
+	secret string,
 ) (txHash string, fee *decimal.Big, err error) {
 	w.safeInvoke(func() error {
-		txHash, fee, err = w.ITxSender.Send(ctx, fromAddress, toAddress, amount)
+		txHash, fee, err = w.ITxSender.Send(ctx, fromAddress, toAddress, amount, secret)
 		return err
 	})
 	return

@@ -11,19 +11,19 @@ type ITxSender struct {
 }
 
 // Send provides a mock function with given fields: ctx, fromAddress, toAddress, amount
-func (_m *ITxSender) Send(ctx context.Context, fromAddress string, toAddress string, amount *decimal.Big) (string, *decimal.Big, error) {
+func (_m *ITxSender) Send(ctx context.Context, fromAddress string, toAddress string, amount *decimal.Big, secret string) (string, *decimal.Big, error) {
 	ret := _m.Called(ctx, fromAddress, toAddress, amount)
 
 	var r0 string
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, *decimal.Big) string); ok {
-		r0 = rf(ctx, fromAddress, toAddress, amount)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *decimal.Big, string) string); ok {
+		r0 = rf(ctx, fromAddress, toAddress, amount, secret)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
 	var r1 *decimal.Big
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, *decimal.Big) *decimal.Big); ok {
-		r1 = rf(ctx, fromAddress, toAddress, amount)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, *decimal.Big, string) *decimal.Big); ok {
+		r1 = rf(ctx, fromAddress, toAddress, amount, secret)
 	} else {
 		if ret.Get(1) != nil {
 			r1 = ret.Get(1).(*decimal.Big)
@@ -31,8 +31,8 @@ func (_m *ITxSender) Send(ctx context.Context, fromAddress string, toAddress str
 	}
 
 	var r2 error
-	if rf, ok := ret.Get(2).(func(context.Context, string, string, *decimal.Big) error); ok {
-		r2 = rf(ctx, fromAddress, toAddress, amount)
+	if rf, ok := ret.Get(2).(func(context.Context, string, string, *decimal.Big, string) error); ok {
+		r2 = rf(ctx, fromAddress, toAddress, amount, secret)
 	} else {
 		r2 = ret.Error(2)
 	}

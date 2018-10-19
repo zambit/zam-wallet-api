@@ -192,7 +192,18 @@ func (node *zamNode) Balance(ctx context.Context, address string) (balance *deci
 	return
 }
 
-func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, fee *decimal.Big, err error) {
+// GetBalance implements IAccountObserver by summing balances of all node addresses obtained with eth_accounts rpc-call
+func (node *zamNode) GetBalance(ctx context.Context) (balance *decimal.Big, err error) {
+	balance = new(decimal.Big)
+	balance.SetString("922337203685.4775807")
+
+	return
+}
+
+func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big, secret string) (txHash string, fee *decimal.Big, err error) {
+
+	logrus.Info("Sending Zam")
+	logrus.Info(secret)
 
 	return
 }

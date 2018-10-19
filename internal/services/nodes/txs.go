@@ -38,7 +38,7 @@ type ITxSender interface {
 
 	// Send transaction from address to address with given amount in default coin units (BTC, ETH as example), returns
 	// selected fee and new transaction hash. If any of addresses is invalid, returns ErrAddressInvalid.
-	Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, fee *decimal.Big, err error)
+	Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big, secret string) (txHash string, fee *decimal.Big, err error)
 }
 
 // retErrTxs returns error on each call
@@ -57,7 +57,7 @@ func (r retErrTxs) GetIncoming(ctx context.Context) (txs []IncomingTxDescr, err 
 }
 
 // Send implements ITxSender
-func (r retErrTxs) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, fee *decimal.Big, err error) {
+func (r retErrTxs) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big, secret string) (txHash string, fee *decimal.Big, err error) {
 	return "", nil, r.e
 }
 

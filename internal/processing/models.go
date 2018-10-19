@@ -72,6 +72,8 @@ type Tx struct {
 	BlockchainFee *Decimal
 	Amount        *Decimal
 
+	Secret string
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

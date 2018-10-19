@@ -304,6 +304,9 @@ func (api *Api) SendToPhone(
 			return err
 		}
 
+		//logrus.Info(amount)
+		//logrus.Info(fromWallet.Secret)
+
 		return trace.InsideSpanE(ctx, "sending", func(ctx context.Context, span opentracing.Span) error {
 			var sendErr error
 			newTx, sendErr = api.processingApi.Send(

@@ -11,6 +11,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type smResources struct {
@@ -20,9 +21,12 @@ type smResources struct {
 }
 
 // StepTx performs as much transaction steps as possible depends on current transaction state
-func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx *Tx, validateErrs error, err error) {
+func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret string) (newTx *Tx, validateErrs error, err error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "step_tx")
 	defer span.Finish()
+
+	logrus.Info("Start processing")
+	//logrus.Info(secret)
 
 	span.LogKV("tx_id", tx.ID)
 
@@ -31,6 +35,8 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 	for stepNum := 0; nextStep; stepNum++ {
 		err = trace.InsideSpanE(ctx, "step_evaluation", func(ctx context.Context, span opentracing.Span) error {
 			stateName := tx.StateName()
+
+			logrus.Info("State name - " + stateName)
 
 			// get state func
 			f, fName := getStateFunc(stateName)
@@ -47,10 +53,19 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 				newState         string
 				stepValidateErrs error
 			)
-			newState, nextStep, stepValidateErrs, err = f(ctx, dbTx, tx, res)
+
+			logrus.Info(fName)
+
+			//if stateName == "send_external" {
+			newState, nextStep, stepValidateErrs, err = onSendExternalTx(ctx, dbTx, tx, res, secret)
+			/*} else {
+				newState, nextStep, stepValidateErrs, err = f(ctx, dbTx, tx, res)
+			}*/
 			if err != nil {
 				return err
 			}
+
+			logrus.Info("New state - " + newState)
 
 			span.LogKV("new_state", newState, "is_stepping_further", nextStep)
 
@@ -85,7 +100,7 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (newTx
 }
 
 //
-type stateFunc func(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources) (
+type stateFunc func(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret string) (
 	newState string,
 	inWait bool,
 	validateErrs error,
@@ -114,6 +129,7 @@ func onRecipientWalletCreated(
 	dbTx *gorm.DB,
 	tx *Tx,
 	res *smResources,
+	secret string,
 ) (newState string, nextStep bool, validateErrs, err error) {
 	//
 	if !res.Coordinator.TxsSender(tx.CoinName()).SupportInternalTxs() {
@@ -132,6 +148,7 @@ func onSendExternalTx(
 	dbTx *gorm.DB,
 	tx *Tx,
 	res *smResources,
+	secret string,
 ) (newState string, nextStep bool, validateErrs, err error) {
 	// check wallet balance again
 	walletTotalBalance, err := res.BalanceHelper.TotalWalletBalanceCtx(ctx, tx.FromWallet)
@@ -143,6 +160,8 @@ func onSendExternalTx(
 		validateErrs = merrors.Append(validateErrs, ErrInsufficientFunds)
 	}
 
+	logrus.Info("Sending external TX")
+
 	var (
 		txHash string
 		fee    *decimal.Big
@@ -150,7 +169,7 @@ func onSendExternalTx(
 	err = trace.InsideSpanE(ctx, "sending_tx", func(ctx context.Context, span opentracing.Span) error {
 		var err error
 		txHash, fee, err = res.Coordinator.TxsSender(tx.CoinName()).Send(
-			ctx, tx.FromWallet.Address, *tx.ToAddress, tx.Amount.V,
+			ctx, tx.FromWallet.Address, *tx.ToAddress, tx.Amount.V, secret,
 		)
 		return err
 	})
@@ -184,6 +203,7 @@ func onValidateTxState(
 	dbTx *gorm.DB,
 	tx *Tx,
 	res *smResources,
+	secret string,
 ) (newState string, nextStep bool, validateErrs, err error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "validate_tx")
 	defer span.Finish()
@@ -192,15 +212,18 @@ func onValidateTxState(
 	if tx.Amount.V == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx amount is missing"))
 	}
+	logrus.Info("Amount passed")
 	if tx.FromWallet == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx src wallet is missing"))
 	}
+	logrus.Info("Sender passed")
 	if tx.ToPhone == nil && tx.ToWalletID == nil && tx.ToAddress == nil {
 		validateErrs = merrors.Append(
 			validateErrs,
 			errors.New("all to_phone, to_wallet and to_address is empty, at least one should ne provided"),
 		)
 	}
+	logrus.Info("Reciepent passed")
 	if validateErrs != nil {
 		newState = TxStateDeclined
 		return
@@ -208,6 +231,9 @@ func onValidateTxState(
 
 	coinName := tx.CoinName()
 	amount := tx.Amount.V
+
+	logrus.Info(coinName)
+	//logrus.Info(amount)
 
 	// forbid self transactions
 	if tx.IsSelfTx() {

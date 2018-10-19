@@ -168,7 +168,7 @@ func (api *Api) Send(
 			span.LogKV("new_tx_id", pTx.ID)
 
 			// preform steps
-			newTx, validationErrs, err = StepTx(ctx, dbTx, pTx, api.createExternalResources())
+			newTx, validationErrs, err = StepTx(ctx, dbTx, pTx, api.createExternalResources(), wallet.Secret)
 
 			return err
 		})
@@ -297,7 +297,7 @@ func (api *Api) NotifyUserCreatesWallet(ctx context.Context, wallet *queries.Wal
 
 		for _, tx := range txsToUpdate {
 			// ignore validation errs, TODO should notify user
-			_, _, err = StepTx(ctx, dbTx, tx, api.createExternalResources())
+			_, _, err = StepTx(ctx, dbTx, tx, api.createExternalResources(), wallet.Secret)
 		}
 		return
 	})

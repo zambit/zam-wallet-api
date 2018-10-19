@@ -330,7 +330,7 @@ func (node *ethNode) GetIncoming(ctx context.Context) (txs []nodes.IncomingTxDes
 }
 
 // Send
-func (node *ethNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big) (txHash string, fee *decimal.Big, err error) {
+func (node *ethNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big, secret string) (txHash string, fee *decimal.Big, err error) {
 	// unlock wallet first
 	err = node.doRPCCall(ctx, "personal_unlockAccount", nil, fromAddress, node.getMasterPass())
 	if err != nil {
