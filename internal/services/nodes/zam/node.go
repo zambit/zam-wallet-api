@@ -167,7 +167,7 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 	// Send transaction
 	resTx, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
 	if err != nil {
-		panic(err)
+		return
 	}
 
 	logrus.Info(resTx)
@@ -204,6 +204,47 @@ func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, am
 
 	logrus.Info("Sending Zam")
 	logrus.Info(secret)
+
+	amountStr := amount.String()
+
+	// Build transaction
+	tx, err := build.Transaction(
+		build.TestNetwork,
+		build.SourceAccount{fromAddress},
+		build.AutoSequence{horizon.DefaultTestNetClient},
+		build.Payment(
+			build.Destination{toAddress},
+			build.CreditAmount{
+				"Zam",
+				"GDR4NOC655VWSR2OCVSV3IQVZG4BQN5QVIHKEENZTE6MDLPOKLMREMXQ",
+				amountStr,
+			},
+		),
+	)
+	if err != nil {
+		return
+	}
+
+	// Sign transaction
+	txe, err := tx.Sign(secret)
+	if err != nil {
+		return
+	}
+
+	txeB64, err := txe.Base64()
+	if err != nil {
+		return
+	}
+
+	// Send transaction
+	resp, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
+	if err != nil {
+		panic(err)
+	}
+
+	txHash = resp.Hash
+
+	logrus.Info(txHash)
 
 	return
 }
