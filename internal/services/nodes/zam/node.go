@@ -117,9 +117,6 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 		return
 	}
 
-	//logrus.Info(pair.Seed())
-	//logrus.Info(pair.Address())
-
 	secret = pair.Seed()
 	address = pair.Address()
 
@@ -202,12 +199,10 @@ func (node *zamNode) GetBalance(ctx context.Context) (balance *decimal.Big, err 
 
 func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, amount *decimal.Big, secret string) (txHash string, fee *decimal.Big, err error) {
 
-	logrus.Info("Sending Zam")
-	logrus.Info(secret)
-
 	amountStr := amount.String()
 
 	// Build transaction
+	//TODO get zam token name and issuer from config
 	tx, err := build.Transaction(
 		build.TestNetwork,
 		build.SourceAccount{fromAddress},

@@ -11,7 +11,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type smResources struct {
@@ -25,9 +24,6 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 	span, ctx := opentracing.StartSpanFromContext(ctx, "step_tx")
 	defer span.Finish()
 
-	logrus.Info("Start processing")
-	//logrus.Info(secret)
-
 	span.LogKV("tx_id", tx.ID)
 
 	var nextStep = true
@@ -35,8 +31,6 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 	for stepNum := 0; nextStep; stepNum++ {
 		err = trace.InsideSpanE(ctx, "step_evaluation", func(ctx context.Context, span opentracing.Span) error {
 			stateName := tx.StateName()
-
-			logrus.Info("State name - " + stateName)
 
 			// get state func
 			f, fName := getStateFunc(stateName)
@@ -54,8 +48,6 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 				stepValidateErrs error
 			)
 
-			logrus.Info(fName)
-
 			//if stateName == "send_external" {
 			newState, nextStep, stepValidateErrs, err = onSendExternalTx(ctx, dbTx, tx, res, secret)
 			/*} else {
@@ -64,8 +56,6 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 			if err != nil {
 				return err
 			}
-
-			logrus.Info("New state - " + newState)
 
 			span.LogKV("new_state", newState, "is_stepping_further", nextStep)
 
@@ -160,8 +150,6 @@ func onSendExternalTx(
 		validateErrs = merrors.Append(validateErrs, ErrInsufficientFunds)
 	}
 
-	logrus.Info("Sending external TX")
-
 	var (
 		txHash string
 		fee    *decimal.Big
@@ -212,18 +200,15 @@ func onValidateTxState(
 	if tx.Amount.V == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx amount is missing"))
 	}
-	logrus.Info("Amount passed")
 	if tx.FromWallet == nil {
 		validateErrs = merrors.Append(validateErrs, errors.New("tx src wallet is missing"))
 	}
-	logrus.Info("Sender passed")
 	if tx.ToPhone == nil && tx.ToWalletID == nil && tx.ToAddress == nil {
 		validateErrs = merrors.Append(
 			validateErrs,
 			errors.New("all to_phone, to_wallet and to_address is empty, at least one should ne provided"),
 		)
 	}
-	logrus.Info("Reciepent passed")
 	if validateErrs != nil {
 		newState = TxStateDeclined
 		return
@@ -231,9 +216,6 @@ func onValidateTxState(
 
 	coinName := tx.CoinName()
 	amount := tx.Amount.V
-
-	logrus.Info(coinName)
-	//logrus.Info(amount)
 
 	// forbid self transactions
 	if tx.IsSelfTx() {
