@@ -64,7 +64,13 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 				validateErrs = merrors.Append(validateErrs, stepValidateErrs)
 			}
 
-			tx.Status = &TxStatus{Name: newState}
+			// Check if Zam token - auto set success status
+			if tx.FromWallet.Coin.Name == "Zam" {
+				tx.Status = &TxStatus{Name: "success"}
+			} else {
+				tx.Status = &TxStatus{Name: newState}
+			}
+
 			return nil
 		})
 	}
