@@ -49,7 +49,7 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 			)
 
 			//if stateName == "send_external" {
-			newState, nextStep, stepValidateErrs, err = onSendExternalTx(ctx, dbTx, tx, res, secret)
+			newState, nextStep, stepValidateErrs, err = f(ctx, dbTx, tx, res, secret)
 			/*} else {
 				newState, nextStep, stepValidateErrs, err = f(ctx, dbTx, tx, res)
 			}*/
