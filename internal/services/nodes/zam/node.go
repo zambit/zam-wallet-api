@@ -22,8 +22,6 @@ import (
 
 const defaultPort = 443
 
-//TODO Get Horizon client from config
-
 // zamNode
 type zamNode struct {
 	host            string
@@ -31,6 +29,9 @@ type zamNode struct {
 	issuerPublicKey string
 	logger          logrus.FieldLogger
 	httpClient      *http.Client
+	testnet         bool
+	stellarClient   *horizon.Client
+	network         build.Network
 }
 
 type configParams struct {
@@ -45,7 +46,7 @@ func Dial(
 ) (io.Closer, error) {
 	logger = logger.WithField("module", "zam.nodes")
 
-	// if port not specified applies default BTC port for selected network typeÅ
+	// if port not specified applies default BTC port for selected network type
 	if !strings.Contains(addr, ":") {
 		addr = fmt.Sprintf("%s:%d", addr, defaultPort)
 	}
@@ -70,6 +71,7 @@ func Dial(
 		issuerPublicKey: params.IssuerPublicKey,
 		logger:          logger,
 		httpClient:      httpClient,
+		testnet:         testNet,
 	}
 	/*	err = node.doRPCCall(context.Background(), "net_version", &netId)
 		if err != nil {
@@ -83,6 +85,14 @@ func Dial(
 		}
 		return nil, wrapNodeErr(err)
 	}*/
+
+	if node.testnet == false {
+		node.stellarClient = horizon.DefaultPublicNetClient
+		node.network = build.PublicNetwork
+	} else {
+		node.stellarClient = horizon.DefaultTestNetClient
+		node.network = build.TestNetwork
+	}
 
 	return node, nil
 }
@@ -120,27 +130,26 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 	secret = pair.Seed()
 	address = pair.Address()
 
-	// Get coins from bot
-	resp, err := http.Get("https://friendbot.stellar.org/?addr=" + address)
-	if err != nil {
-		return
+	if node.testnet == true {
+		// Get coins from bot
+		resp, err := http.Get("https://friendbot.stellar.org/?addr=" + address)
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		logrus.Info(string(body))
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	logrus.Info(string(body))
 
 	// Change Trust
+
 	// Build Transaction
-	//TODO get zam token name and issuer from config
 	//TODO move SetOption transaction to separate method
 	tx, err := build.Transaction(
 		build.SourceAccount{address},
-		build.AutoSequence{horizon.DefaultTestNetClient},
-		build.TestNetwork,
-		build.Trust("Zam", "GDR4NOC655VWSR2OCVSV3IQVZG4BQN5QVIHKEENZTE6MDLPOKLMREMXQ"),
+		build.AutoSequence{node.stellarClient},
+		node.network,
+		build.Trust(node.assetName, node.issuerPublicKey),
 	)
 	if err != nil {
 		fmt.Println(err)
@@ -162,7 +171,7 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 	//logrus.Info("tx base64: %s", txeB64)
 
 	// Send transaction
-	resTx, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
+	resTx, err := node.stellarClient.SubmitTransaction(txeB64)
 	if err != nil {
 		return
 	}
@@ -175,8 +184,12 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 // Balance
 func (node *zamNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
 
+	logrus.Info(node.testnet)
+	logrus.Info(node.assetName)
+	logrus.Info(node.issuerPublicKey)
+
 	//Get data from Stellar blockchain
-	client := horizon.DefaultTestNetClient
+	client := node.stellarClient
 	account, err := client.LoadAccount(address)
 	if err != nil {
 		err = coerceErr(err)
@@ -202,16 +215,15 @@ func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, am
 	amountStr := amount.String()
 
 	// Build transaction
-	//TODO get zam token name and issuer from config
 	tx, err := build.Transaction(
-		build.TestNetwork,
+		node.network,
 		build.SourceAccount{fromAddress},
-		build.AutoSequence{horizon.DefaultTestNetClient},
+		build.AutoSequence{node.stellarClient},
 		build.Payment(
 			build.Destination{toAddress},
 			build.CreditAmount{
-				"Zam",
-				"GDR4NOC655VWSR2OCVSV3IQVZG4BQN5QVIHKEENZTE6MDLPOKLMREMXQ",
+				node.assetName,
+				node.issuerPublicKey,
 				amountStr,
 			},
 		),
@@ -232,7 +244,7 @@ func (node *zamNode) Send(ctx context.Context, fromAddress, toAddress string, am
 	}
 
 	// Send transaction
-	resp, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
+	resp, err := node.stellarClient.SubmitTransaction(txeB64)
 	if err != nil {
 		panic(err)
 	}
