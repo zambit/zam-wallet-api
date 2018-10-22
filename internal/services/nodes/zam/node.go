@@ -31,7 +31,6 @@ type zamNode struct {
 	issuerPublicKey string
 	logger          logrus.FieldLogger
 	httpClient      *http.Client
-	testnet         bool
 }
 
 type configParams struct {
@@ -71,7 +70,6 @@ func Dial(
 		issuerPublicKey: params.IssuerPublicKey,
 		logger:          logger,
 		httpClient:      httpClient,
-		testnet:         testNet,
 	}
 	/*	err = node.doRPCCall(context.Background(), "net_version", &netId)
 		if err != nil {
@@ -122,19 +120,17 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 	secret = pair.Seed()
 	address = pair.Address()
 
-	if node.testnet == true {
-		// Get coins from bot
-		resp, err := http.Get("https://friendbot.stellar.org/?addr=" + address)
-		if err != nil {
-			return
-		}
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-		logrus.Info(string(body))
+	// Get coins from bot
+	resp, err := http.Get("https://friendbot.stellar.org/?addr=" + address)
+	if err != nil {
+		return
 	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logrus.Info(string(body))
 
 	// Change Trust
 	// Build Transaction
@@ -178,8 +174,6 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 
 // Balance
 func (node *zamNode) Balance(ctx context.Context, address string) (balance *decimal.Big, err error) {
-
-	logrus.Info(node.testnet)
 
 	//Get data from Stellar blockchain
 	client := horizon.DefaultTestNetClient
