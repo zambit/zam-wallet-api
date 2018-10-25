@@ -65,7 +65,7 @@ func StepTx(ctx context.Context, dbTx *gorm.DB, tx *Tx, res *smResources, secret
 			}
 
 			// Check if Zam token - auto set success status
-			if tx.FromWallet.Coin.Name == "Zam" {
+			if tx.FromWallet.Coin.Name == "Zam" && newState == "waiting" {
 				tx.Status = &TxStatus{Name: "success"}
 			} else {
 				tx.Status = &TxStatus{Name: newState}
