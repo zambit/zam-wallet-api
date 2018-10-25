@@ -24,18 +24,20 @@ const defaultPort = 443
 
 // zamNode
 type zamNode struct {
-	host            string
-	assetName       string
-	issuerPublicKey string
-	logger          logrus.FieldLogger
-	httpClient      *http.Client
-	testnet         bool
-	stellarClient   *horizon.Client
-	network         build.Network
+	host                     string
+	assetName                string
+	issuerPublicKey          string
+	logger                   logrus.FieldLogger
+	httpClient               *http.Client
+	testnet                  bool
+	stellarClient            *horizon.Client
+	network                  build.Network
+	StellarDistributorPublic string
+	StellarDistributorSecret string
 }
 
 type configParams struct {
-	AssetName, IssuerPublicKey string
+	AssetName, IssuerPublicKey, StellarDistributorPublic, StellarDistributorSecret string
 }
 
 // Dial
@@ -66,12 +68,14 @@ func Dial(
 	//
 	httpClient := &http.Client{}
 	node := &zamNode{
-		host:            addr,
-		assetName:       params.AssetName,
-		issuerPublicKey: params.IssuerPublicKey,
-		logger:          logger,
-		httpClient:      httpClient,
-		testnet:         testNet,
+		host:                     addr,
+		assetName:                params.AssetName,
+		issuerPublicKey:          params.IssuerPublicKey,
+		logger:                   logger,
+		httpClient:               httpClient,
+		testnet:                  testNet,
+		StellarDistributorPublic: params.StellarDistributorPublic,
+		StellarDistributorSecret: params.StellarDistributorSecret,
 	}
 	/*	err = node.doRPCCall(context.Background(), "net_version", &netId)
 		if err != nil {
@@ -139,6 +143,43 @@ func (node *zamNode) Create(ctx context.Context) (address string, secret string,
 			log.Fatal(err)
 		}
 		logrus.Info(string(body))
+	} else {
+		// Create account fron Zam Distributor seed
+		tx, err := build.Transaction(
+			build.SourceAccount{node.StellarDistributorPublic},
+			build.AutoSequence{node.stellarClient},
+			node.network,
+			build.CreateAccount(
+				build.Destination{address},
+				build.NativeAmount{"1.7"},
+			),
+		)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Sign transaction
+		txe, err := tx.Sign(node.StellarDistributorSecret)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		txeB64, err := txe.Base64()
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		//fmt.Printf("tx base64: %s", txeB64)
+
+		// Send transaction
+		resTx, err := node.stellarClient.SubmitTransaction(txeB64)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		logrus.Info(resTx)
 	}
 
 	// Change Trust

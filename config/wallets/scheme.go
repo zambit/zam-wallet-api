@@ -33,8 +33,10 @@ type ETHNodeConfiguration struct {
 }
 
 type ZAMNodeConfiguration struct {
-	AssetName       string
-	IssuerPublicKey string
+	AssetName                string
+	IssuerPublicKey          string
+	StellarDistributorPublic string
+	StellarDistributorSecret string
 }
 
 type Scheme struct {
