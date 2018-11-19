@@ -3,11 +3,12 @@ package txs
 import (
 	"context"
 	"database/sql"
+	"strings"
+
 	"git.zam.io/wallet-backend/common/pkg/types"
 	"git.zam.io/wallet-backend/wallet-api/db"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
 	"github.com/jinzhu/gorm"
-	"strings"
 )
 
 // Api is IApi implementation
@@ -120,13 +121,13 @@ func addTxPreloads(q *gorm.DB) *gorm.DB {
 		"ToWallet.Coin",
 	).Preload(
 		"Status",
-	)
+	).Preload("External")
 }
 
 // applyFilters applies given filters onto q
 func applyFilterCtx(tx, q *gorm.DB, filters []Filterer) (fCtx filterCtx, err error) {
 	var (
-		paginator *Pager
+		paginator  *Pager
 		userFilter *UserFilter
 	)
 

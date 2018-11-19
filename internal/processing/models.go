@@ -2,9 +2,10 @@ package processing
 
 import (
 	"database/sql/driver"
+	"time"
+
 	"git.zam.io/wallet-backend/wallet-api/internal/wallets/queries"
 	"github.com/ericlagergren/decimal/sql/postgres"
-	"time"
 )
 
 // TxStatus
@@ -77,6 +78,8 @@ type Tx struct {
 
 	StatusID int64
 	Status   *TxStatus `gorm:"foreignkey:StatusID;association_autoupdate:false;association_autocreate:false"`
+
+	External *TxExternal `gorm:"foreignkey:TxID;association_autoupdate:false;association_autocreate:false"`
 }
 
 func (Tx) TableName() string {
