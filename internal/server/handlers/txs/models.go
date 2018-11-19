@@ -1,6 +1,10 @@
 package txs
 
 import (
+	"strconv"
+	"strings"
+	"time"
+
 	"git.zam.io/wallet-backend/common/pkg/types"
 	"git.zam.io/wallet-backend/common/pkg/types/decimal"
 	"git.zam.io/wallet-backend/wallet-api/internal/processing"
@@ -8,9 +12,6 @@ import (
 	"git.zam.io/wallet-backend/wallet-api/internal/server/handlers/wallets"
 	bdecimal "github.com/ericlagergren/decimal"
 	"github.com/jinzhu/now"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // SendRequest used to parse send tx request body
@@ -124,8 +125,7 @@ func ToView(tx *processing.Tx, userPhone string, rate common.AdditionalRate) *Vi
 		direction = "outgoing"
 	} else {
 		if tx.IsExternal() {
-			// leave this field empty for external txs because we don't track such info :(
-			sender = ""
+			sender = tx.External.Recipient
 		} else {
 			sender = tx.FromWallet.UserPhone
 		}
