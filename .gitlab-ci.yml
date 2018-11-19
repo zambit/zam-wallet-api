@@ -15,7 +15,7 @@ variables:
 build:
   stage: build
   variables:
-    GOROOT: /usr/lib/go-1.10/
+    GOROOT: /usr/lib/go/
     GOPATH: /var/opt/golang
     BUILD_OUT_DIR: $CI_PROJECT_DIR/build
     DEP_LOCK_FILE: glide.lock
